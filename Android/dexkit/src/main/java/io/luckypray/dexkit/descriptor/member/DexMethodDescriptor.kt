@@ -1,6 +1,10 @@
 package io.luckypray.dexkit.descriptor.member
 
 import io.luckypray.dexkit.descriptor.*
+import io.luckypray.dexkit.descriptor.util.getClassName
+import io.luckypray.dexkit.descriptor.util.getConstructorSignature
+import io.luckypray.dexkit.descriptor.util.getMethodSignature
+import io.luckypray.dexkit.descriptor.util.getTypeSig
 import java.lang.reflect.Constructor
 import java.lang.reflect.Member
 import java.lang.reflect.Method
@@ -37,7 +41,7 @@ class DexMethodDescriptor : DexDescriptor {
         declaringClassSig = descriptor.substring(0, idx1)
         name = descriptor.substring(idx1 + 2, idx2)
         parameterTypesSig = descriptor.substring(idx2 + 1, idx3)
-        returnTypeSig = descriptor.substring(idx2 + 1)
+        returnTypeSig = descriptor.substring(idx3 + 1)
     }
 
     constructor(method: Method) {
@@ -54,12 +58,15 @@ class DexMethodDescriptor : DexDescriptor {
         returnTypeSig = "V"
     }
 
-    constructor(clz: String, name: String, methodTypeSig: String) {
+    constructor(clz: String, name: String, methodSignature: String) {
+        val idx = methodSignature.indexOf(')')
+        if (idx == -1 || methodSignature.first() != '(') {
+            throw IllegalArgumentException("Invalid method signature: $methodSignature")
+        }
         declaringClassSig = clz
         this.name = name
-        val idx = methodTypeSig.indexOf(')')
-        parameterTypesSig = methodTypeSig.substring(1, idx)
-        returnTypeSig = methodTypeSig.substring(idx + 1)
+        parameterTypesSig = methodSignature.substring(1, idx)
+        returnTypeSig = methodSignature.substring(idx + 1)
     }
 
     @Throws(NoSuchMethodException::class)
@@ -71,7 +78,7 @@ class DexMethodDescriptor : DexDescriptor {
             var clz = classLoader.loadClass(declaringClassName)
             do {
                 for (constructor in clz.declaredConstructors) {
-                    if (signature == getConstructorTypeSig(constructor)) {
+                    if (signature == getConstructorSignature(constructor)) {
                         return constructor
                     }
                 }
@@ -91,7 +98,7 @@ class DexMethodDescriptor : DexDescriptor {
             var clz = classLoader.loadClass(declaringClassName)
             do {
                 for (method in clz.declaredMethods) {
-                    if (method.name == name && signature == getMethodTypeSig(method)) {
+                    if (method.name == name && signature == getMethodSignature(method)) {
                         return method
                     }
                 }
