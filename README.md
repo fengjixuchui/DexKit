@@ -28,9 +28,11 @@ And there are many other APIs:
 - `DexKit::FindMethodUsingString`: find method used utf8 string
 - `DexKit::FindMethod`: find method by multiple conditions
 - `DexKit::FindSubClasses`: find all direct subclasses of the specified class
-- `DexKit::FindMethodOpPrefixSeq`:  find all method using opcode prefix sequence(op range: `0x00`-`0xFF`)
+- `DexKit::FindMethodUsingOpPrefixSeq`:  find all method using opcode prefix sequence(op range: `0x00`-`0xFF`)
 - `DexKit::FindMethodUsingOpCodeSeq`: find all method using opcode sequence(op range: `0x00`-`0xFF`)
 - `DexKit::GetMethodOpCodeSeq`: get method opcode sequence(op range: `0x00`-`0xFF`)
+
+> **Note**: At present, all instructions are only for standard dex instructions and do not include odex optimization instructions.
 
 For more detailed instructions, please refer to [dex_kit.h](https://github.com/LuckyPray/DexKit/blob/master/Core/include/dex_kit.h).
 
@@ -57,7 +59,18 @@ dependencies {
 }
 ```
 
-java:
+#### JAVA Example
+
+`DexKitBridge` provides 2 factory methods to create `Dexkit` instances:
+
+- `DexKitBridge.create(apkPath)`: normally, please use it.
+- `DexKitBridge.create(classLoader, true)`: for reinforced apps, used `classLoader` and set option useCookieDexFile to true.
+
+PS: `DexKitBridge.create(classLoader, false)` ≈ `DexKitBridge.create(apkPath)`, but the former may contain part of the system dex.
+
+> **Note**: for normally apps, using `DexKitBridge.create(classLoader, true)` may be a problem.
+> Because the dexfile in cookies may be modified (dex2oat), currently DexKit cannot be parsed odex's `quick` instruction.
+
 ```java 
 import io.luckypry.dexkit.DexKitBridge;
 // ...
@@ -69,9 +82,12 @@ public class DexUtil {
     }
 
     public static void findMethod() {
+        // for no-reinforced apps please use apkpath to load, because of the exist of dex2oat and CompactDex(cdex),
+        // dexkit currently only handles StandardDex.
+        String apkPath = application.applicationInfo.sourceDir
         // try-with-resources, auto close DexKitBridge, no need to call DexKitBridge.close()
         // if you don't use try-with-resources, be sure to manually call DexKitBridge.close() to release the jni memory
-        try (DexKitBridge dexKitBridge = DexKitBridge.create(hostClassLoader)) {
+        try (DexKitBridge dexKitBridge = DexKitBridge.create(apkPath)) {
             if (dexKitBridge == null) {
                 Log.e("DexUtil", "DexKitBridge create failed");
                 return;

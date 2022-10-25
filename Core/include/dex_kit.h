@@ -34,9 +34,13 @@ constexpr dex::u4 fUsing = fGetting | fSetting;
 class DexKit {
 public:
 
+    explicit DexKit() = default;
+
     explicit DexKit(std::string_view apk_path, int unzip_thread_num = -1);
 
-    explicit DexKit(std::vector<std::pair<const void *, size_t>> &dex_images);
+    void AddImages(std::vector<std::unique_ptr<MemMap>> dex_images);
+
+    void AddPath(std::string_view apk_path, int unzip_thread_num = -1);
 
     ~DexKit() = default;
 
@@ -107,6 +111,7 @@ public:
                      const std::string &caller_method_declare_name,
                      const std::string &caller_method_return_type,
                      const std::optional<std::vector<std::string>> &caller_method_param_types,
+                     bool unique_result = true,
                      const std::vector<size_t> &dex_priority = {});
 
     /**
@@ -140,6 +145,7 @@ public:
                        const std::string &be_called_method_declare_name,
                        const std::string &be_called_method_return_type,
                        const std::optional<std::vector<std::string>> &be_called_method_param_types,
+                       bool unique_result = true,
                        const std::vector<size_t> &dex_priority = {});
 
     /**
@@ -168,6 +174,7 @@ public:
                          const std::string &caller_method_declare_name,
                          const std::string &caller_method_return_type,
                          const std::optional<std::vector<std::string>> &caller_method_param_types,
+                         bool unique_result = true,
                          const std::vector<size_t> &dex_priority = {});
 
     /**
@@ -190,6 +197,7 @@ public:
                           const std::string &method_declare_name,
                           const std::string &method_return_type,
                           const std::optional<std::vector<std::string>> &method_param_types,
+                          bool unique_result = true,
                           const std::vector<size_t> &dex_priority = {});
 
     /**
@@ -233,12 +241,12 @@ public:
      * @return method descriptor
      */
     std::vector<std::string>
-    FindMethodOpPrefixSeq(const std::vector<uint8_t> &op_prefix_seq,
-                          const std::string &method_declare_class,
-                          const std::string &method_declare_name,
-                          const std::string &method_return_type,
-                          const std::optional<std::vector<std::string>> &method_param_types,
-                          const std::vector<size_t> &dex_priority = {});
+    FindMethodUsingOpPrefixSeq(const std::vector<uint8_t> &op_prefix_seq,
+                               const std::string &method_declare_class,
+                               const std::string &method_declare_name,
+                               const std::string &method_return_type,
+                               const std::optional<std::vector<std::string>> &method_param_types,
+                               const std::vector<size_t> &dex_priority = {});
 
     /**
      *
@@ -285,7 +293,7 @@ public:
 
 private:
     std::vector<dex::u4> init_flags_;
-    std::vector<MemMap> maps_;
+    std::vector<std::unique_ptr<MemMap>> maps_;
     std::vector<std::pair<const void *, size_t>> dex_images_;
 
     uint32_t thread_num_ = std::thread::hardware_concurrency();
@@ -302,7 +310,7 @@ private:
 
     std::vector<std::string> cache_;
 
-    void InitImages();
+    void InitImages(int begin, int end);
 
     void InitCached(size_t dex_idx, dex::u4 flag);
 
@@ -317,10 +325,10 @@ private:
                       const std::string &field_declare_name, uint32_t field_type);
 
     static inline bool NeedMethodMatch(const std::string &method_descriptor,
-                                const std::string &caller_method_declare_class,
-                                const std::string &caller_method_declare_name,
-                                const std::string &caller_method_return_type,
-                                const std::optional<std::vector<std::string>> &caller_method_param_types);
+                                       const std::string &caller_method_declare_class,
+                                       const std::string &caller_method_declare_name,
+                                       const std::string &caller_method_return_type,
+                                       const std::optional<std::vector<std::string>> &caller_method_param_types);
 
     void InitMethodOpCodeSeq(size_t dex_idx, uint32_t method_idx);
 

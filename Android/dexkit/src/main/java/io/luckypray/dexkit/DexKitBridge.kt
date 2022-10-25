@@ -13,8 +13,8 @@ class DexKitBridge : Closeable {
         token = nativeInitDexKit(apkPath)
     }
 
-    private constructor(classLoader: ClassLoader) {
-        token = nativeInitDexKitByClassLoader(classLoader)
+    private constructor(classLoader: ClassLoader, useCookieDexFile: Boolean) {
+        token = nativeInitDexKitByClassLoader(classLoader, useCookieDexFile)
     }
 
     val isValid
@@ -95,6 +95,7 @@ class DexKitBridge : Closeable {
         callerMethodName: String = "",
         callerMethodReturnType: String = "",
         callerMethodParameterTypes: Array<String>? = null,
+        uniqueResult: Boolean = true,
         dexPriority: IntArray? = null
     ): List<DexMethodDescriptor> {
         return nativeFindMethodCaller(
@@ -108,6 +109,7 @@ class DexKitBridge : Closeable {
             callerMethodName,
             callerMethodReturnType,
             callerMethodParameterTypes,
+            uniqueResult,
             dexPriority
         ).map { DexMethodDescriptor(it) }
     }
@@ -122,6 +124,7 @@ class DexKitBridge : Closeable {
         beCalledMethodName: String = "",
         beCalledMethodReturnType: String = "",
         beCalledMethodParamTypes: Array<String>? = null,
+        uniqueResult: Boolean = true,
         dexPriority: IntArray? = null
     ): Map<DexMethodDescriptor, List<DexMethodDescriptor>> {
         return nativeFindMethodInvoking(
@@ -135,6 +138,7 @@ class DexKitBridge : Closeable {
             beCalledMethodName,
             beCalledMethodReturnType,
             beCalledMethodParamTypes,
+            uniqueResult,
             dexPriority
         ).mapKeys { DexMethodDescriptor(it.key) }
             .mapValues { it.value.map { DexMethodDescriptor(it) } }
@@ -150,6 +154,7 @@ class DexKitBridge : Closeable {
         callerMethodName: String = "",
         callerMethodReturnType: String = "",
         callerMethodParamTypes: Array<String>? = null,
+        uniqueResult: Boolean = true,
         dexPriority: IntArray? = null
     ): Map<DexMethodDescriptor, List<DexFieldDescriptor>> {
         return nativeFindMethodUsingField(
@@ -163,6 +168,7 @@ class DexKitBridge : Closeable {
             callerMethodName,
             callerMethodReturnType,
             callerMethodParamTypes,
+            uniqueResult,
             dexPriority
         ).mapKeys { DexMethodDescriptor(it.key) }
             .mapValues { it.value.map { DexFieldDescriptor(it) } }
@@ -175,6 +181,7 @@ class DexKitBridge : Closeable {
         methodName: String = "",
         methodReturnType: String = "",
         methodParamTypes: Array<String>? = null,
+        uniqueResult: Boolean = true,
         dexPriority: IntArray? = null
     ): List<DexMethodDescriptor> {
         return nativeFindMethodUsingString(
@@ -185,6 +192,7 @@ class DexKitBridge : Closeable {
             methodName,
             methodReturnType,
             methodParamTypes,
+            uniqueResult,
             dexPriority
         ).map { DexMethodDescriptor(it) }
     }
@@ -214,7 +222,7 @@ class DexKitBridge : Closeable {
             .map { DexClassDescriptor(it) }
     }
 
-    fun findMethodOpPrefixSeq(
+    fun findMethodUsingOpPrefixSeq(
         opPrefixSeq: IntArray,
         methodDeclareClass: String = "",
         methodName: String = "",
@@ -222,7 +230,7 @@ class DexKitBridge : Closeable {
         methodParamTypes: Array<String>? = null,
         dexPriority: IntArray? = null
     ): List<DexMethodDescriptor> {
-        return nativeFindMethodOpPrefixSeq(
+        return nativeFindMethodUsingOpPrefixSeq(
             token,
             opPrefixSeq,
             methodDeclareClass,
@@ -282,9 +290,17 @@ class DexKitBridge : Closeable {
             return if (helper.isValid) helper else null
         }
 
+        /**
+         *
+         * @param loader class loader
+         * @param useCookieDexFile
+         * if true, will try to use cookie to load dex file. else will use dex file path.
+         * if cookies file contains CompactDex, will use apkPath to load dex.
+         * if contains OatDex, Some functions may not work properly.
+         */
         @JvmStatic
-        fun create(loader: ClassLoader): DexKitBridge? {
-            val helper = DexKitBridge(loader)
+        fun create(loader: ClassLoader, useCookieDexFile: Boolean): DexKitBridge? {
+            val helper = DexKitBridge(loader, useCookieDexFile)
             return if (helper.isValid) helper else null
         }
 
@@ -292,7 +308,7 @@ class DexKitBridge : Closeable {
         private external fun nativeInitDexKit(apkPath: String): Long
 
         @JvmStatic
-        private external fun nativeInitDexKitByClassLoader(loader: ClassLoader): Long
+        private external fun nativeInitDexKitByClassLoader(loader: ClassLoader, useCookieDexFile: Boolean): Long
 
         @JvmStatic
         private external fun nativeSetThreadNum(nativePtr: Long, threadNum: Int)
@@ -331,6 +347,7 @@ class DexKitBridge : Closeable {
             callerMethodName: String,
             callerMethodReturnType: String,
             callerMethodParameterTypes: Array<String>?,
+            uniqueResult: Boolean,
             dexPriority: IntArray?
         ): Array<String>
 
@@ -346,6 +363,7 @@ class DexKitBridge : Closeable {
             beCalledMethodName: String,
             beCalledMethodReturnType: String,
             beCalledMethodParamTypes: Array<String>?,
+            uniqueResult: Boolean,
             dexPriority: IntArray?
         ): Map<String, Array<String>>
 
@@ -361,6 +379,7 @@ class DexKitBridge : Closeable {
             callerMethodName: String,
             callerMethodReturnType: String,
             callerMethodParamTypes: Array<String>?,
+            uniqueResult: Boolean,
             dexPriority: IntArray?
         ): Map<String, Array<String>>
 
@@ -373,6 +392,7 @@ class DexKitBridge : Closeable {
             methodName: String,
             methodReturnType: String,
             methodParamTypes: Array<String>?,
+            uniqueResult: Boolean,
             dexPriority: IntArray?
         ): Array<String>
 
@@ -394,7 +414,7 @@ class DexKitBridge : Closeable {
         ): Array<String>
 
         @JvmStatic
-        private external fun nativeFindMethodOpPrefixSeq(
+        private external fun nativeFindMethodUsingOpPrefixSeq(
             nativePtr: Long,
             opPrefixSeq: IntArray,
             methodDeclareClass: String,

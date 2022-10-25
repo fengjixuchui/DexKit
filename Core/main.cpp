@@ -110,12 +110,13 @@ int main() {
     // result ex.
     // {"Lcom/tencent/aekit/openrender/internal/Frame$Type;-><clinit>()V"}
     auto usedStringMethods = dexKit.FindMethodUsingString(
-            "^NEW$",
+            "mei",
             true,
             "",
             "",
             "",
-            dexkit::null_param);
+            dexkit::null_param,
+            false);
     std::cout << "\nFindMethodUsedString -> \n";
     for (auto &value: usedStringMethods) {
         std::cout << "\t" << value << "\n";
@@ -143,7 +144,7 @@ int main() {
     // returns all method descriptors matching the prefix of a sequence of bytecode operations
     // result ex.
     // {"Lcom/bumptech/glide/d/c;-><init>()V"}
-    auto usedOpPrefixMethods = dexKit.FindMethodOpPrefixSeq(
+    auto usedOpPrefixMethods = dexKit.FindMethodUsingOpPrefixSeq(
             {0x70, 0x22, 0x70, 0x5b, 0x22, 0x70, 0x5b, 0x0e},
             "",
             "",

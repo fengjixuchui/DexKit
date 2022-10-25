@@ -28,9 +28,11 @@
 - `DexKit::FindMethodUsingString`: 查找指定字符串的调用者
 - `DexKit::FindMethod`: 多条件查找方法
 - `DexKit::FindSubClasses`: 查找直系子类
-- `DexKit::FindMethodOpPrefixSeq`: 查找满足特定op前缀序列的方法(op范围: `0x00`-`0xFF`)
+- `DexKit::FindMethodUsingOpPrefixSeq`: 查找满足特定op前缀序列的方法(op范围: `0x00`-`0xFF`)
 - `DexKit::FindMethodUsingOpCodeSeq`: 查找使用了特定op序列的方法(op范围: `0x00`-`0xFF`)
 - `DexKit::GetMethodOpCodeSeq`: 获取方法op序列(op范围: `0x00`-`0xFF`)
+
+> **Note**: 目前所有指令仅针对标准dex指令，不包含odex优化指令。
 
 目前更详细的API说明请参考 [dex_kit.h](https://github.com/LuckyPray/DexKit/blob/master/Core/include/dex_kit.h).
 
@@ -57,7 +59,18 @@ dependencies {
 }
 ```
 
-java:
+#### JAVA Example
+
+`DexKitBridge` 提供了2个工厂方法创建 `Dexkit` 对象:
+
+- `DexKitBridge.create(apkPath)`: 正常情况使用此方法。
+- `DexKitBridge.create(classLoader, true)`: 对于加固 APP 使用 classLoader 创建。
+
+PS: `DexKitBridge.create(classLoader, false)` ≈ `DexKitBridge.create(apkPath)`, 但是前者可能会包含系统dex文件.
+
+> **Note**: 对于正常APP使用 `DexKitBridge.create(classLoader)` 创建可能存在问题.
+> 因为 cookie 中的 dexfile 可能会被修改(dex2oat)，目前 DexKit 无法解析 odex 中的 `quick` 指令。
+
 ```java 
 import io.luckypry.dexkit.DexKitBridge;
 // ...
@@ -69,9 +82,12 @@ public class DexUtil {
     }
 
     public static void findMethod() {
+        // 对于非加固 app 请使用 apk_path 加载，因为存在 dex2oat 以及 CompactDex(cdex)，
+        // dexkit 目前只能处理 StandardDex。
+        String apkPath = application.applicationInfo.sourceDir
         // try-with-resources, 结束时自动调用 DexKitBridge.close() 释放资源
         // 如果你不想使用 try-with-resources，请务必手动调用 DexKitBridge.close() 释放jni占用的内存
-        try (DexKitBridge dexKitBridge = DexKitBridge.create(hostClassLoader)) {
+        try (DexKitBridge dexKitBridge = DexKitBridge.create(apkPath)) {
             if (dexKitBridge == null) {
                 Log.e("DexUtil", "DexKitBridge create failed");
                 return;

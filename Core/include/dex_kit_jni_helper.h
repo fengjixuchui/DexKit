@@ -17,12 +17,6 @@ jintArray U8Vec2JIntArr(JNIEnv *env, const std::vector<uint8_t> &vector);
 
 jobject EmptyJMap(JNIEnv *env);
 
-jlong CreateDexKitInstance(JNIEnv *env, jstring apkPath) {
-    auto path = env->GetStringUTFChars(apkPath, nullptr);
-    auto dexKit = new dexkit::DexKit(path);
-    return reinterpret_cast<jlong>(dexKit);
-}
-
 void SetThreadNum(JNIEnv *env, jlong dexKitPtr, jint threadNum) {
     if (!dexKitPtr) {
         return;
@@ -93,6 +87,7 @@ jobjectArray FindMethodCaller(JNIEnv *env,
                               jstring caller_method_name,
                               jstring caller_method_return_type,
                               jobjectArray caller_method_param_types,
+                              jboolean unique_result,
                               jintArray dex_priority) {
     if (!dexKitPtr) {
         return StrVec2JStrArr(env, std::vector<std::string>());
@@ -126,6 +121,7 @@ jobjectArray FindMethodCaller(JNIEnv *env,
                                         callerMethodName,
                                         callerMethodReturnType,
                                         callerParamTypes,
+                                        unique_result,
                                         dexPriority);
     env->ReleaseStringUTFChars(method_descriptor, methodDescriptor);
     env->ReleaseStringUTFChars(method_declare_class, methodDeclareClass);
@@ -148,6 +144,7 @@ jobject FindMethodInvoking(JNIEnv *env,
                            jstring be_called_method_name,
                            jstring be_called_method_return_type,
                            jobjectArray be_called_method_param_types,
+                           jboolean unique_result,
                            jintArray dex_priority) {
     if (!dexKitPtr) {
         return CMap2JMap(env, std::map<std::string, std::vector<std::string>>());
@@ -182,6 +179,7 @@ jobject FindMethodInvoking(JNIEnv *env,
                                           beCalledMethodDeclareName,
                                           beCalledMethodReturnType,
                                           beCalledMethodParamTypes,
+                                          unique_result,
                                           dexPriority);
     env->ReleaseStringUTFChars(method_descriptor, methodDescriptor);
     env->ReleaseStringUTFChars(method_declare_class, methodDeclareClass);
@@ -204,6 +202,7 @@ jobject FindMethodUsingField(JNIEnv *env,
                              jstring caller_method_name,
                              jstring caller_method_return_type,
                              jobjectArray caller_method_param_types,
+                             jboolean unique_result,
                              jintArray dex_priority) {
     if (!dexKitPtr) {
         return StrVec2JStrArr(env, std::vector<std::string>());
@@ -236,6 +235,7 @@ jobject FindMethodUsingField(JNIEnv *env,
                                             callerMethodName,
                                             callerMethodReturnType,
                                             callerParamTypes,
+                                            unique_result,
                                             dexPriority);
     env->ReleaseStringUTFChars(field_descriptor, fieldDescriptor);
     env->ReleaseStringUTFChars(field_declare_class, fieldDeclareClass);
@@ -255,6 +255,7 @@ jobjectArray FindMethodUsingString(JNIEnv *env,
                                    jstring method_name,
                                    jstring method_return_type,
                                    jobjectArray method_param_types,
+                                   jboolean unique_result,
                                    jintArray dex_priority) {
     if (!dexKitPtr) {
         return StrVec2JStrArr(env, std::vector<std::string>());
@@ -278,6 +279,7 @@ jobjectArray FindMethodUsingString(JNIEnv *env,
                                              methodName,
                                              methodReturnType,
                                              ParamTypes,
+                                             unique_result,
                                              dexPriority);
     env->ReleaseStringUTFChars(used_utf8_string, usedUtf8String);
     env->ReleaseStringUTFChars(method_declare_class, methodDeclareClass);
@@ -337,14 +339,14 @@ jobjectArray FindSubClasses(JNIEnv *env,
     return StrVec2JStrArr(env, res);
 }
 
-jobjectArray FindMethodOpPrefixSeq(JNIEnv *env,
-                                   jlong dexKitPtr,
-                                   jintArray op_prefix_seq,
-                                   jstring method_declare_class,
-                                   jstring method_name,
-                                   jstring method_return_type,
-                                   jobjectArray method_param_types,
-                                   jintArray dex_priority) {
+jobjectArray FindMethodUsingOpPrefixSeq(JNIEnv *env,
+                                        jlong dexKitPtr,
+                                        jintArray op_prefix_seq,
+                                        jstring method_declare_class,
+                                        jstring method_name,
+                                        jstring method_return_type,
+                                        jobjectArray method_param_types,
+                                        jintArray dex_priority) {
     if (!dexKitPtr) {
         return StrVec2JStrArr(env, std::vector<std::string>());
     }
@@ -361,12 +363,12 @@ jobjectArray FindMethodOpPrefixSeq(JNIEnv *env,
     if (dex_priority != NULL) {
         dexPriority = JIntArr2IntVec(env, dex_priority);
     }
-    auto res = dexKit->FindMethodOpPrefixSeq(opPrefixSeq,
-                                             methodDeclareClass,
-                                             methodName,
-                                             methodReturnType,
-                                             ParamTypes,
-                                             dexPriority);
+    auto res = dexKit->FindMethodUsingOpCodeSeq(opPrefixSeq,
+                                                methodDeclareClass,
+                                                methodName,
+                                                methodReturnType,
+                                                ParamTypes,
+                                                dexPriority);
     env->ReleaseStringUTFChars(method_declare_class, methodDeclareClass);
     env->ReleaseStringUTFChars(method_name, methodName);
     env->ReleaseStringUTFChars(method_return_type, methodReturnType);
