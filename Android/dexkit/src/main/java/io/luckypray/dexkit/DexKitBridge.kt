@@ -39,6 +39,13 @@ class DexKitBridge : Closeable {
         return nativeGetDexNum(token)
     }
 
+    /**
+     * write all dex file to [outPath]
+     */
+    fun exportDexFile(outPath: String) {
+        nativeExportDexFile(token, outPath)
+    }
+
     fun batchFindClassesUsingStrings(
         map: Map<String, Iterable<String>>,
         advancedMatch: Boolean = true,
@@ -197,6 +204,59 @@ class DexKitBridge : Closeable {
         ).map { DexMethodDescriptor(it) }
     }
 
+    fun findClassUsingAnnotation(
+        annotationClass: String,
+        annotationUsingString: String = "",
+        dexPriority: IntArray? = null
+    ): List<DexClassDescriptor> {
+        return nativeFindClassUsingAnnotation(
+            token,
+            annotationClass,
+            annotationUsingString,
+            dexPriority
+        ).map { DexClassDescriptor(it) }
+    }
+
+    fun findFieldUsingAnnotation(
+        annotationClass: String,
+        annotationUsingString: String = "",
+        fieldDeclareClass: String = "",
+        fieldName: String = "",
+        fieldType: String = "",
+        dexPriority: IntArray? = null
+    ): List<DexFieldDescriptor> {
+        return nativeFindFieldUsingAnnotation(
+            token,
+            annotationClass,
+            annotationUsingString,
+            fieldDeclareClass,
+            fieldName,
+            fieldType,
+            dexPriority
+        ).map { DexFieldDescriptor(it) }
+    }
+
+    fun findMethodUsingAnnotation(
+        annotationClass: String,
+        annotationUsingString: String = "",
+        methodDeclareClass: String = "",
+        methodName: String = "",
+        methodReturnType: String = "",
+        methodParamTypes: Array<String>? = null,
+        dexPriority: IntArray? = null
+    ): List<DexMethodDescriptor> {
+        return nativeFindMethodUsingAnnotation(
+            token,
+            annotationClass,
+            annotationUsingString,
+            methodDeclareClass,
+            methodName,
+            methodReturnType,
+            methodParamTypes,
+            dexPriority
+        ).map { DexMethodDescriptor(it) }
+    }
+
     fun findMethod(
         methodDeclareClass: String,
         methodName: String = "",
@@ -317,7 +377,10 @@ class DexKitBridge : Closeable {
         private external fun nativeGetDexNum(nativePtr: Long): Int
 
         @JvmStatic
-        private external fun nativeRelease(nativePtr: Long): Unit
+        private external fun nativeRelease(nativePtr: Long)
+
+        @JvmStatic
+        private external fun nativeExportDexFile(nativePtr: Long, outDir: String)
 
         @JvmStatic
         private external fun nativeBatchFindClassesUsingStrings(
@@ -393,6 +456,37 @@ class DexKitBridge : Closeable {
             methodReturnType: String,
             methodParamTypes: Array<String>?,
             uniqueResult: Boolean,
+            dexPriority: IntArray?
+        ): Array<String>
+
+        @JvmStatic
+        private external fun nativeFindClassUsingAnnotation(
+            nativePtr: Long,
+            annotationClass: String,
+            annotationUsingString: String,
+            dexPriority: IntArray?
+        ): Array<String>
+
+        @JvmStatic
+        private external fun nativeFindFieldUsingAnnotation(
+            nativePtr: Long,
+            annotationClass: String,
+            annotationUsingString: String,
+            fieldDeclareClass: String,
+            fieldName: String,
+            fieldType: String,
+            dexPriority: IntArray?
+        ): Array<String>
+
+        @JvmStatic
+        private external fun nativeFindMethodUsingAnnotation(
+            nativePtr: Long,
+            annotationClass: String,
+            annotationUsingString: String,
+            methodDeclareClass: String,
+            methodName: String,
+            methodReturnType: String,
+            methodParamTypes: Array<String>?,
             dexPriority: IntArray?
         ): Array<String>
 
