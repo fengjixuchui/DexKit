@@ -2,195 +2,124 @@
     <h1> DexKit </h1>
 
 [![license](https://img.shields.io/github/license/LuckyPray/DexKit.svg)](https://www.gnu.org/licenses/lgpl-3.0.html)
-[![](https://jitpack.io/v/LuckyPray/DexKit.svg)](https://jitpack.io/#LuckyPray/DexKit)
+[![Maven Central](https://img.shields.io/maven-central/v/org.luckypray/DexKit.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22org.luckypray%22%20AND%20a:%22DexKit%22)
 
-[README](https://github.com/LuckyPray/DexKit/blob/master/README.md)|[中文说明](https://github.com/LuckyPray/DexKit/blob/master/README_zh.md)
+English | [简体中文](https://github.com/LuckyPray/DexKit/blob/master/README_zh.md)
 
 </div>
 
-An easy-to-use, high-performance dex deobfuscation library. Easy to use your CMAKE/Android projects.
+A high-performance runtime parsing library for dex implemented in C++, used for lookup of obfuscated classes,
+methods, or properties.
 
-## API introduction
+---
 
-There are two APIs can meet most of your usage scenarios:
+[DexKit Document](https://luckypray.org/DexKit/en/) contains some examples of API calls, and more APIs can be found in
+[DexKitBridge](http://kdoc.dexkit.luckypray.org/dexkit/io.luckypray.dexkit/-dex-kit-bridge/index.html).
 
-- **`DexKit::BatchFindClassesUsingStrings`**
-- **`DexKit::BatchFindMethodsUsingStrings`**
+[DexKit API KDoc](https://luckypray.org/DexKit-Doc) is a KDoc (similar to JavaDoc) generated from source code comments. 
+However, it is recommended to use an IDE such as IDEA to view source code comments during development.
 
-> **Note**: In all cases you should avoid searching for keywords that contain duplicate content, eg: {"key_word", "word"}, as this will cause tags to be overwritten, resulting in inaccurate search results.
-> If there is such a need, open the advanced search mode as much as possible, and use the string to match the content exactly, for example, modify it to this: {"^key_word$", "^word$"}
+## Background
 
-And there are many other APIs:
+For `Xposed` modules, we often need to `Hook` specific methods, but due to obfuscation, we need to use means 
+to find the methods we need. However, for `JVM` languages, the information we can obtain at runtime is limited. 
+In the past, we looked up obfuscated methods by traversing all classes in the ClassLoader, filtering by 
+package name, the number of methods contained in the class, and method signature. This approach is not only 
+very inefficient, but also helpless in the case of completely obfuscated package names.
 
-- `DexKit::FindMethodCaller`: find caller for specified method.
-- `DexKit::FindMethodInvoking`: find the called method
-- `DexKit::FindMethodUsingField`: Find method to get/set specified field
-- `DexKit::FindMethodUsingString`: find method used utf8 string
-- `DexKit::FindMethod`: find method by multiple conditions
-- `DexKit::FindSubClasses`: find all direct subclasses of the specified class
-- `DexKit::FindMethodUsingOpPrefixSeq`:  find all method using opcode prefix sequence(op range: `0x00`-`0xFF`)
-- `DexKit::FindMethodUsingOpCodeSeq`: find all method using opcode sequence(op range: `0x00`-`0xFF`)
-- `DexKit::GetMethodOpCodeSeq`: get method opcode sequence(op range: `0x00`-`0xFF`)
+So, do we have other ways? The answer is yes. `ProGuard` obfuscation rules only obscure class names, method names, 
+and property names, but they do not modify code logic, and there are usually no major code changes during minor updates. 
+Therefore, we can reverse search for the information we need by parsing bytecode.
 
-> **Note**: At present, all instructions are only for standard dex instructions and do not include odex optimization instructions.
+Currently, there are many libraries for parsing Dex files, but most are implemented based on `dexlib2`.
+If the host application has a large number of Dex files, the search time can take several minutes, 
+which is a poor user experience. That's where `DexKit` comes in. It is implemented in C++ and uses 
+multi-threading acceleration to complete searches in a short amount of time. It has extremely high performance, 
+with search times in the milliseconds range and support for multi-threaded concurrent searches. 
+Even for large applications with 30+ Dex files, `DexKit` can complete a single search in about 100 milliseconds. 
+In addition, it is also optimized for string search scenarios, even if you want to search hundreds of strings, 
+it only takes no more than twice the time to complete.
 
-For more detailed instructions, please refer to [dex_kit.h](https://github.com/LuckyPray/DexKit/blob/master/Core/include/dex_kit.h).
+## Supported features
 
-## Quick start
+- Batch search methods/classes with a specific string
+- Find methods/classes using a specific string
+- Method call/called search
+- Direct subclass search
+- Method multi-condition search
+- Op sequence search (only supports standard dex instructions)
+- Annotation search (currently only supports searching for values that are strings)
 
-### Method 1: Direct introduction (recommended)
+> **Note**:
+> This is the early stage of the project, and we cannot guarantee that the API will not change in the future.
+> If you have any suggestions or opinions, please let us know.
 
-However, this approach will import an extra `so` file. If you don't want to import an extra `so` file, please use the second/third method.
+## Usage
 
-`build.gradle`:
-```groovy
-allprojects {
-    repositories {
-        ...
-        maven { url 'https://jitpack.io' }
-    }
+### Library
+
+Add `DexKit` dependency in `build.gradle`.
+
+```gradle
+repositories {
+    mavenCentral()
 }
-```
-
-`app/build.gradle`:
-```groovy
 dependencies {
-    implementation 'com.github.LuckyPray:DexKit:<version>'
+    implementation 'io.github.neonorbit:dexplore:1.4.3'
 }
 ```
 
-#### JAVA Example
+### Usage Sample
 
-`DexKitBridge` provides 2 factory methods to create `Dexkit` instances:
+Sample App:
 
-- `DexKitBridge.create(apkPath)`: normally, please use it.
-- `DexKitBridge.create(classLoader, true)`: for reinforced apps, used `classLoader` and set option useCookieDexFile to true.
-
-PS: `DexKitBridge.create(classLoader, false)` ≈ `DexKitBridge.create(apkPath)`, but the former may contain part of the system dex.
-
-> **Note**: for normally apps, using `DexKitBridge.create(classLoader, true)` may be a problem.
-> Because the dexfile in cookies may be modified (dex2oat), currently DexKit cannot be parsed odex's `quick` instruction.
-
-```java 
-import io.luckypry.dexkit.DexKitBridge;
-// ...
-
-public class DexUtil {
-
-    static {
-        System.loadLibrary("dexkit");
+```java
+public class abc {
+    
+    public boolean cvc() {
+        boolean b = false;
+        // ...
+        Log.d("VipCheckUtil", "info: xxxx");
+        // ...
+        return b;
     }
+}
+```
 
-    public static void findMethod() {
-        // for no-reinforced apps please use apkpath to load, because of the exist of dex2oat and CompactDex(cdex),
-        // dexkit currently only handles StandardDex.
-        String apkPath = application.applicationInfo.sourceDir
-        // try-with-resources, auto close DexKitBridge, no need to call DexKitBridge.close()
-        // if you don't use try-with-resources, be sure to manually call DexKitBridge.close() to release the jni memory
-        try (DexKitBridge dexKitBridge = DexKitBridge.create(apkPath)) {
-            if (dexKitBridge == null) {
-                Log.e("DexUtil", "DexKitBridge create failed");
-                return;
-            }
-            List<DexClassDescriptor> classes = dexKitBridge.findSubClasses("android.app.Activity", null);
-            for (DexClassDescriptor clazz : classes) {
-                String name = clazz.getName();
-                String simpleName = clazz.getSimpleName();
-                Class<?> clz = clazz.getClassInstance(hostClassLoader);
-                Log.i("DexUtil", "findSubClasses: " + clz);
-            }
-        } catch (Throwable e) {
-            Log.e("DexUtil", Log.getStackTraceString(e));
+Sample Hook:
+
+```kotlin
+class MainHook : IXposedHookLoadPackage {
+    
+    override fun handleLoadPackage(loadPackageParam: LoadPackageParam) {
+        val packageName = loadPackageParam.packageName
+        val apkPath = loadPackageParam.appInfo.sourceDir
+        if (packageName != "com.test.demo") {
+            return
+        }
+        System.loadLibrary("dexkit")
+        DexKitBridge.create(apkPath)?.use { bridge ->
+            val resultMap = bridge.batchFindMethodsUsingStrings {
+                addQuery("VipCheckUtil_isVip", setOf("VipCheckUtil", "userInfo:"))
+            }.firstOrNull()?.let {
+                val method: Method = it.getMethodInstance(hostClassLoader)
+                XposedBridge.hookMethod(method, XC_MethodReplacement.returnConstant(true))
+            } ?: Log.e("DexKit", "search result empty")
         }
     }
 }
 ```
 
-### Method 2：google prefab
-`app/build.gradle`:
+### Usage Document
 
-```groovy
-android {
-    buildFeatures {
-        prefab true
-    }
-}
-```
+- [Click here](https://luckypray.org/DexKit/en/) to go to the documentation page to view more detailed tutorials.
 
-> **Note**: DexKit-Android uses the [prefab package schema v2](https://github.com/google/prefab/releases/tag/v2.0.0),
-which is configured by default since [Android Gradle Plugin 7.1.0](https://developer.android.com/studio/releases/gradle-plugin?buildsystem=cmake#7-1-0).
-If you are using Android Gradle Plugin earlier than 7.1.0, please add the following configuration to `gradle.properties`:
+## Open source reference
 
-```
-android.prefabVersion=2.0.0
-```
-
-Also avoid `libdexkit.so` being added to the apk, you can add the following configuration to `app/build.gradle`:
-```groovy
-android {
-    packagingOptions {
-        jniLibs.excludes.add("lib/**/libdexkit.so")
-    }
-}
-```
-
-CMake:
-
-You can use `find_package` in `CMakeLists.txt` to use DexKit:
-```cmake
-add_library(my_lib SHARED native.cpp)
-
-# Add two lines below, must contain libz!!
-find_package(dexkit REQUIRED CONFIG)
-target_link_libraries(my_lib dexkit::dex_kit_static z)
-```
-
-
-At the same time, we also provide [dex_kit_jni_helper.h](https://github.com/LuckyPray/DexKit/blob/master/Core/include/dex_kit_jni_helper.h) 
-to transition java to c++ / c++ to java data objects.
-```c++
-#include <jni.h>
-#include <dex_kit.h>
-#include "dex_kit_jni_helper.h"
-
-#define DEXKIT_JNI extern "C" JNIEXPORT JNICALL
-
-DEXKIT_JNI jobjectArray
-Java_io_luckypray_dexkit_DexKitBridge_nativeFindMethodUsingString(JNIEnv *env, jclass clazz,
-                                                                  jlong native_ptr,
-                                                                  jstring used_string,
-                                                                  jboolean advanced_match,
-                                                                  jstring method_declare_class,
-                                                                  jstring method_name,
-                                                                  jstring method_return_type,
-                                                                  jobjectArray method_param_types,
-                                                                  jintArray dex_priority) {
-    return FindMethodUsingString(env, native_ptr, used_string, advanced_match, method_declare_class,
-                                 method_name, method_return_type, method_param_types, dex_priority);
-}
-```
-
-### Method 3: git submodule
-
-reference: https://github.com/LuckyPray/XAutoDaily/tree/master/dexkit
-
-## Example
-
-- [main.cpp](https://github.com/LuckyPray/DexKit/blob/master/Core/main.cpp)
-- [qq-example.cpp](https://github.com/LuckyPray/DexKit/blob/master/Core/qq-example.cpp)
-
-## Benchmark
-
-qq-example.cpp in MacPro M1 to deobfuscate `qq-8.9.3.apk`, the result is:
-
-```txt
-findClass count: 47
-findMethod count: 29
-used time: 207 ms
-```
+- [slicer](https://cs.android.com/android/platform/superproject/+/master:tools/dexter/slicer/export/slicer/)
+- [ThreadPool](https://github.com/progschj/ThreadPool)
+- [BiliRoaming](https://github.com/yujincheng08/BiliRoaming)
 
 ## License
 
-The slicer directory is partially copied from [AOSP](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/startop/view_compiler).
-
-Modified parts are owed by LuckyPray Developers. If you would like to use it in an open source project, please submodule it.
+[LGPL-3.0](https://www.gnu.org/licenses/lgpl-3.0.html) © LuckyPray

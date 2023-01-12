@@ -1,5 +1,6 @@
 #include <jni.h>
 #include <android/log.h>
+#include <sys/eventfd.h>
 #include "dex_kit.h"
 #include "dex_kit_jni_helper.h"
 
@@ -36,12 +37,16 @@ static bool IsCompactDexFile(const void *image) {
 }
 
 static bool CheckPoint(void *addr) {
-    int nullfd = open("/dev/random", O_WRONLY);
+    auto fd = eventfd(0, 0);
+    if (fd < 0) {
+        LOGE("eventfd failed: %s", strerror(errno));
+        return false;
+    }
     bool valid = true;
-    if (write(nullfd, (void *) addr, sizeof(addr)) < 0) {
+    if (write(fd, (void *) addr, 8) < 0) {
         valid = false;
     }
-    close(nullfd);
+    close(fd);
     return valid;
 }
 
@@ -82,7 +87,7 @@ Java_io_luckypray_dexkit_DexKitBridge_nativeInitDexKit(JNIEnv *env, jclass clazz
 DEXKIT_JNI jlong
 Java_io_luckypray_dexkit_DexKitBridge_nativeInitDexKitByClassLoader(JNIEnv *env, jclass clazz,
                                                                     jobject class_loader,
-                                                                    jboolean use_cookie_dex_file) {
+                                                                    jboolean use_memory_dex_file) {
     if (!class_loader) {
         return 0;
     }
@@ -107,7 +112,7 @@ Java_io_luckypray_dexkit_DexKitBridge_nativeInitDexKitByClassLoader(JNIEnv *env,
                 env->GetLongArrayElements(cookie, nullptr));
         LOGI("dex_file_length -> %d", dex_file_length);
         std::vector<const DexFile *> dex_images;
-        if (use_cookie_dex_file) {
+        if (use_memory_dex_file) {
             for (int j = 0; j < dex_file_length; ++j) {
                 const auto *dex_file = dex_files[j];
                 if (!CheckPoint((void *) dex_file) ||
@@ -272,9 +277,10 @@ Java_io_luckypray_dexkit_DexKitBridge_nativeFindClassUsingAnnotation(JNIEnv *env
                                                                      jlong native_ptr,
                                                                      jstring annotation_class,
                                                                      jstring annotation_using_string,
+                                                                     jboolean advanced_match,
                                                                      jintArray dex_priority) {
     return FindClassUsingAnnotation(env, native_ptr, annotation_class, annotation_using_string,
-                                    dex_priority);
+                                    advanced_match, dex_priority);
 }
 
 DEXKIT_JNI jobjectArray
@@ -282,12 +288,14 @@ Java_io_luckypray_dexkit_DexKitBridge_nativeFindFieldUsingAnnotation(JNIEnv *env
                                                                      jlong native_ptr,
                                                                      jstring annotation_class,
                                                                      jstring annotation_using_string,
+                                                                     jboolean advanced_match,
                                                                      jstring field_declare_class,
                                                                      jstring field_name,
                                                                      jstring field_type,
                                                                      jintArray dex_priority) {
     return FindFieldUsingAnnotation(env, native_ptr, annotation_class, annotation_using_string,
-                                    field_declare_class, field_name, field_type, dex_priority);
+                                    advanced_match, field_declare_class, field_name, field_type,
+                                    dex_priority);
 }
 
 DEXKIT_JNI jobjectArray
@@ -295,26 +303,28 @@ Java_io_luckypray_dexkit_DexKitBridge_nativeFindMethodUsingAnnotation(JNIEnv *en
                                                                       jlong native_ptr,
                                                                       jstring annotation_class,
                                                                       jstring annotation_using_string,
+                                                                      jboolean advanced_match,
                                                                       jstring method_declare_class,
                                                                       jstring method_name,
                                                                       jstring method_return_type,
                                                                       jobjectArray method_param_types,
                                                                       jintArray dex_priority) {
     return FindMethodUsingAnnotation(env, native_ptr, annotation_class, annotation_using_string,
-                                     method_declare_class, method_name, method_return_type,
+                                     advanced_match, method_declare_class, method_name, method_return_type,
                                      method_param_types, dex_priority);
 }
 
 DEXKIT_JNI jobjectArray
 Java_io_luckypray_dexkit_DexKitBridge_nativeFindMethod(JNIEnv *env, jclass clazz,
                                                        jlong native_ptr,
+                                                       jstring method_descriptor,
                                                        jstring method_declare_class,
                                                        jstring method_name,
                                                        jstring method_return_type,
                                                        jobjectArray method_param_types,
                                                        jintArray dex_priority) {
-    return FindMethod(env, native_ptr, method_declare_class, method_name, method_return_type,
-                      method_param_types, dex_priority);
+    return FindMethod(env, native_ptr, method_descriptor, method_declare_class,
+                      method_name, method_return_type, method_param_types, dex_priority);
 }
 
 DEXKIT_JNI jobjectArray

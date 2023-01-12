@@ -2,198 +2,115 @@
     <h1> DexKit </h1>
 
 [![license](https://img.shields.io/github/license/LuckyPray/DexKit.svg)](https://www.gnu.org/licenses/lgpl-3.0.html)
-[![](https://jitpack.io/v/LuckyPray/DexKit.svg)](https://jitpack.io/#LuckyPray/DexKit)
+[![Maven Central](https://img.shields.io/maven-central/v/org.luckypray/DexKit.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22org.luckypray%22%20AND%20a:%22DexKit%22)
 
-[README](https://github.com/LuckyPray/DexKit/blob/master/README.md)|[中文说明](https://github.com/LuckyPray/DexKit/blob/master/README_zh.md)
+[English](https://github.com/LuckyPray/DexKit/blob/master/README.md) | 简体中文
 
 </div>
 
-一个简单易用、高性能的dex反混淆库。轻松接入你的 CMAKE/Android 项目。
+一个使用 C++ 实现的 dex 高性能运行时解析库，用于查找被混淆的类、方法或者属性。
 
-## API说明
+---
 
-这两个 API 可以满足你大部分的使用场景：
+[DexKit 文档](https://luckypray.org/DexKit/zh-cn/) 内包含了部分 API 的调用示例，更多的 API 请查看 
+[DexKitBridge](http://kdoc.dexkit.luckypray.org/dexkit/io.luckypray.dexkit/-dex-kit-bridge/index.html)。
 
-- **`DexKit::BatchFindClassesUsingStrings`**
-- **`DexKit::BatchFindMethodsUsingStrings`**
+[DexKit API KDoc](https://luckypray.org/DexKit-Doc) 基于源码注释生成的 KDoc（类似于 JavaDoc）。
+但是更推荐使用 IDEA 等 IDE 在开发时查看源码内注释。
 
-> **Note**：无论什么情况都应当避免搜索关键词包含重复内容， 例如：{"key_word", "word"}，因为这样会导致标记被覆盖，从而导致搜索结果不准确。
-> 如果真的有这样的需求，尽可能打开高级搜索模式，同时使用字符串完全匹配内容，例如修改成这样：{"^key_word$", "^word$"}
+## 背景
 
-以及其他 API：
+对于 `Xposed` 模块来说，我们总是需要对某些特定的方法进行 `Hook` ，但是由于混淆的存在，我们需要使用一些手段来找到我们需要的方法。
+但是对于 `JVM` 语言来说，我们在运行时能获取到的信息是有限的，在以往我们查找被混淆后的方法是遍历 ClassLoader 中所有的类，通过包名、
+类中包含的方法数量以及方法签名过滤。这种方式的效率不仅十分低下，且对于包名彻底混淆的情况下，我们基本束手无策。
 
-- `DexKit::FindMethodCaller`: 查找指定方法的调用者
-- `DexKit::FindMethodInvoking`: 查找指定方法调用的方法
-- `DexKit::FindMethodUsingField`: 查找获取/设置指定字段的方法
-- `DexKit::FindMethodUsingString`: 查找指定字符串的调用者
-- `DexKit::FindMethod`: 多条件查找方法
-- `DexKit::FindSubClasses`: 查找直系子类
-- `DexKit::FindMethodUsingOpPrefixSeq`: 查找满足特定op前缀序列的方法(op范围: `0x00`-`0xFF`)
-- `DexKit::FindMethodUsingOpCodeSeq`: 查找使用了特定op序列的方法(op范围: `0x00`-`0xFF`)
-- `DexKit::GetMethodOpCodeSeq`: 获取方法op序列(op范围: `0x00`-`0xFF`)
+是否还有其他方法？答案是肯定的，`ProGuard` 混淆规则只会混淆类名、方法名和属性名，但是不会修改代码逻辑，
+并且在小版本更新时通常不会出现大规模的代码修改。因此，我们可以通过解析字节码来反向查找我们需要的信息。
 
-> **Note**: 目前所有指令仅针对标准dex指令，不包含odex优化指令。
+目前对于 Dex 文件的解析库有很多，但是基本上都是基于 `dexlib2` 实现的。如果宿主应用程序内有很多 Dex 文件，则搜索时间可能长达数分钟，
+这对用户来说是一种不好的体验。因此，`DexKit` 应运而生。它使用 C++ 实现，并使用多线程加速，可以在短时间内完成搜索。它具有非常高的性能，
+单次搜索的时间在毫秒级别，且支持多线程并发搜索。就算是拥有着 30+ dex 文件的大型应用，使用 `DexKit` 也能在 100 毫秒左右完成单次搜索。
+此外，它还针对字符串搜索场景进行了优化，即使要搜索数以百计的字符串，也只需要在两倍的时间内即可完成。
 
-目前更详细的API说明请参考 [dex_kit.h](https://github.com/LuckyPray/DexKit/blob/master/Core/include/dex_kit.h).
+## 支持的功能
 
-## 快速上手
+- 批量搜索指定字符串的方法/类
+- 查找使用了指定字符串的方法/类
+- 方法调用/被调用搜索
+- 直系子类搜索
+- 方法多条件搜索
+- op序列搜索(仅支持标准dex指令)
+- 注解搜索（目前仅支持搜索value为字符串的查找）
 
-### 方式一：直接引入（推荐）
+> **Note:**
+> 目前为项目初期阶段，不保证未来API不会发生改动，如果你有什么好的建议或者意见，欢迎提出。
 
-但是该方式会额外引入一个so文件，如果你有洁癖需要all in one的话，可以使用方式二或者三。
+## 使用
 
-`build.gradle`:
-```groovy
-allprojects {
-    repositories {
-        ...
-        maven { url 'https://jitpack.io' }
-    }
+### 依赖
+
+添加 `DexKit` 依赖进 `build.gradle`.
+
+```gradle
+repositories {
+    mavenCentral()
 }
-```
-
-`app/build.gradle`:
-```groovy
 dependencies {
-    implementation 'com.github.LuckyPray:DexKit:<version>'
+    implementation 'io.github.neonorbit:dexplore:1.4.3'
 }
 ```
 
-#### JAVA Example
+### 使用样例
 
-`DexKitBridge` 提供了2个工厂方法创建 `Dexkit` 对象:
+宿主样例:
 
-- `DexKitBridge.create(apkPath)`: 正常情况使用此方法。
-- `DexKitBridge.create(classLoader, true)`: 对于加固 APP 使用 classLoader 创建。
-
-PS: `DexKitBridge.create(classLoader, false)` ≈ `DexKitBridge.create(apkPath)`, 但是前者可能会包含系统dex文件.
-
-> **Note**: 对于正常APP使用 `DexKitBridge.create(classLoader)` 创建可能存在问题.
-> 因为 cookie 中的 dexfile 可能会被修改(dex2oat)，目前 DexKit 无法解析 odex 中的 `quick` 指令。
-
-```java 
-import io.luckypry.dexkit.DexKitBridge;
-// ...
-
-public class DexUtil {
-
-    static {
-        System.loadLibrary("dexkit");
+```java
+public class abc {
+    
+    public boolean cvc() {
+        boolean b = false;
+        // ...
+        Log.d("VipCheckUtil", "info: xxxx");
+        // ...
+        return b;
     }
+}
+```
 
-    public static void findMethod() {
-        // 对于非加固 app 请使用 apk_path 加载，因为存在 dex2oat 以及 CompactDex(cdex)，
-        // dexkit 目前只能处理 StandardDex。
-        String apkPath = application.applicationInfo.sourceDir
-        // try-with-resources, 结束时自动调用 DexKitBridge.close() 释放资源
-        // 如果你不想使用 try-with-resources，请务必手动调用 DexKitBridge.close() 释放jni占用的内存
-        try (DexKitBridge dexKitBridge = DexKitBridge.create(apkPath)) {
-            if (dexKitBridge == null) {
-                Log.e("DexUtil", "DexKitBridge create failed");
-                return;
-            }
-            List<DexClassDescriptor> classes = dexKitBridge.findSubClasses("android.app.Activity", null);
-            for (DexClassDescriptor clazz : classes) {
-                String name = clazz.getName();
-                String simpleName = clazz.getSimpleName();
-                Class<?> clz = clazz.getClassInstance(hostClassLoader);
-                Log.i("DexUtil", "findSubClasses: " + clz);
-            }
-        } catch (Throwable e) {
-            Log.e("DexUtil", Log.getStackTraceString(e));
+Hook 样例:
+
+```kotlin
+class MainHook : IXposedHookLoadPackage {
+    
+    override fun handleLoadPackage(loadPackageParam: LoadPackageParam) {
+        val packageName = loadPackageParam.packageName
+        val apkPath = loadPackageParam.appInfo.sourceDir
+        if (packageName != "com.test.demo") {
+            return
+        }
+        System.loadLibrary("dexkit")
+        DexKitBridge.create(apkPath)?.use { bridge ->
+            val resultMap = bridge.batchFindMethodsUsingStrings {
+                addQuery("VipCheckUtil_isVip", setOf("VipCheckUtil", "userInfo:"))
+            }.firstOrNull()?.let {
+                val method: Method = it.getMethodInstance(hostClassLoader)
+                XposedBridge.hookMethod(method, XC_MethodReplacement.returnConstant(true))
+            } ?: Log.e("DexKit", "search result empty")
         }
     }
 }
 ```
 
-### 方式二：google prefab
-`app/build.gradle`:
+### 使用文档
 
-```groovy
-android {
-    buildFeatures {
-        prefab true
-    }
-}
-```
+- [Click here](https://luckypray.org/DexKit/en/) to go to the documentation page to view more detailed tutorials.
 
-> **Note**：DexKit-Android 使用 [prefab package schema v2](https://github.com/google/prefab/releases/tag/v2.0.0)，
-它是从 [Android Gradle Plugin 7.1.0](https://developer.android.com/studio/releases/gradle-plugin?buildsystem=cmake#7-1-0) 开始作为默认配置的。
-如果你使用的是 Android Gradle Plugin 7.1.0 之前的版本，请在 `gradle.properties` 中加入以下配置：
+## 第三方开源引用
 
-```
-android.prefabVersion=2.0.0
-```
+- [slicer](https://cs.android.com/android/platform/superproject/+/master:tools/dexter/slicer/export/slicer/)
+- [ThreadPool](https://github.com/progschj/ThreadPool)
+- [BiliRoaming](https://github.com/yujincheng08/BiliRoaming)
 
-同时为了避免`libdexkit.so`被添加到apk中，你可以在`app/build.gradle`添加以下配置：
+## 许可证
 
-```groovy
-android {
-    packagingOptions {
-        jniLibs.excludes.add("lib/**/libdexkit.so")
-    }
-}
-```
-
-CMake:
-
-你可以直接在 `CMakeLists.txt` 中使用 `find_package` 来使用 DexKit:
-```cmake
-add_library(my_lib SHARED native.cpp)
-
-# 添加如下两行，注意必须添加 libz！！如果你有其他依赖可以放在后面
-find_package(dexkit REQUIRED CONFIG)
-target_link_libraries(my_lib dexkit::dex_kit_static z)
-```
-
-同时，我们提供了头文件 [dex_kit_jni_helper.h](https://github.com/LuckyPray/DexKit/blob/master/Core/include/dex_kit_jni_helper.h)
-便捷转换java/c++数据对象的互转：
-```c++
-#include <jni.h>
-#include <dex_kit.h>
-#include "dex_kit_jni_helper.h"
-
-#define DEXKIT_JNI extern "C" JNIEXPORT JNICALL
-
-DEXKIT_JNI jobjectArray
-Java_io_luckypray_dexkit_DexKitBridge_nativeFindMethodUsingString(JNIEnv *env, jclass clazz,
-                                                                  jlong native_ptr,
-                                                                  jstring used_string,
-                                                                  jboolean advanced_match,
-                                                                  jstring method_declare_class,
-                                                                  jstring method_name,
-                                                                  jstring method_return_type,
-                                                                  jobjectArray method_param_types,
-                                                                  jintArray dex_priority) {
-    return FindMethodUsingString(env, native_ptr, used_string, advanced_match, method_declare_class,
-                                 method_name, method_return_type, method_param_types, dex_priority);
-}
-```
-
-### 方式三：使用Git子模块
-
-较为复杂，参考：https://github.com/LuckyPray/XAutoDaily/tree/master/dexkit
-
-
-## c++使用示例
-
-- [main.cpp](https://github.com/LuckyPray/DexKit/blob/master/Core/main.cpp)
-- [qq-example.cpp](https://github.com/LuckyPray/DexKit/blob/master/Core/qq-example.cpp)
-
-## 基准测试
-
-qq-example.cpp 在MacPro M1环境下对 `qq-8.9.3.apk` 执行结果如下所示:
-
-```text
-findClass count: 47
-findMethod count: 29
-used time: 207 ms
-```
-
-## License
-
-slicer目录下内容是从 [AOSP](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/startop/view_compiler)
-拷贝的.
-
-修改部分归 LuckyPray 所有。如果您想在开源项目中使用，请将其子模块化。
-
+[LGPL-3.0](https://www.gnu.org/licenses/lgpl-3.0.html) © LuckyPray

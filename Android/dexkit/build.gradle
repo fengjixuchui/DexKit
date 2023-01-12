@@ -2,7 +2,14 @@ plugins {
     id "com.android.library"
     id "maven-publish"
     id "org.jetbrains.kotlin.android"
+    id "org.jetbrains.dokka"
+    id "signing"
 }
+
+def signingPropFile = new File(projectDir, "signing.properties")
+def performSigning = signingPropFile.exists()
+
+def libVersion = "1.1.0-beta6"
 
 android {
     namespace "io.luckypray.dexkit"
@@ -99,6 +106,11 @@ dependencies {
     implementation "dev.rikka.ndk.thirdparty:cxx:1.2.0"
 }
 
+task androidSourcesJar(type: Jar) {
+    archiveClassifier.set('sources')
+    from android.sourceSets.main.java.srcDirs
+}
+
 // Because the components are created only during the afterEvaluate phase, you must
 // configure your publications using the afterEvaluate() lifecycle method.
 afterEvaluate {
@@ -108,12 +120,70 @@ afterEvaluate {
             release(MavenPublication) {
                 // Applies the component for the release build variant.
                 from components.release
+                artifact androidSourcesJar
 
                 // You can then customize attributes of the publication as shown below.
-                groupId = "io.luckypray"
-                artifactId = "dexkit"
-                version = "1.0.0"
+                groupId = "org.luckypray"
+                artifactId = "DexKit"
+                description = "A high-performance dex parsing library implemented in C++"
+                version = libVersion
+
+                pom {
+                    name = 'DexKit'
+                    description = 'A high-performance runtime parsing library for dex implemented in C++.'
+                    url = 'https://github.com/LuckyPray/DexKit'
+                    licenses {
+                        license {
+                            name = 'LGPL-3.0 license'
+                            url = 'https://www.gnu.org/licenses/lgpl-3.0.html'
+                        }
+                    }
+                    developers {
+                        developer {
+                            id = 'teble'
+                            name = 'teble'
+                            email = 'me@teble.me'
+                        }
+                    }
+                    scm {
+                        connection = 'scm:git:git://github.com/LuckyPray/DexKit.git'
+                        developerConnection = 'scm:git:ssh://github.com/LuckyPray/DexKit.git'
+                        url = 'https://github.com/LuckyPray/DexKit.git'
+                    }
+                }
             }
+        }
+        if (performSigning) {
+            repositories {
+                maven {
+                    url 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/'
+                    credentials {
+                        def properties = new Properties()
+                        def bufferedReader = new BufferedReader(new FileReader(signingPropFile))
+                        properties.load(bufferedReader)
+
+                        username = properties.getProperty("username")
+                        password = properties.getProperty("password")
+                    }
+                }
+            }
+        }
+    }
+
+    signing {
+        if (performSigning) {
+            sign publishing.publications.release
+        }
+    }
+}
+
+dokkaHtml.configure {
+//    outputDirectory.set("$rootDir/javadoc")
+    dokkaSourceSets {
+        named("main") {
+            noAndroidSdkLink.set(true)
+            noStdlibLink.set(true)
+            noJdkLink.set(true)
         }
     }
 }
