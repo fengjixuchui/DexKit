@@ -6,17 +6,19 @@ package io.luckypray.dexkit.builder
  * @since 1.1.0
  */
 class MethodInvokingArgs private constructor(
+    override val findPackage: String,
     val methodDescriptor: String,
     val methodDeclareClass: String,
     val methodName: String,
     val methodReturnType: String,
     val methodParameterTypes: Array<String>?,
+    val beInvokedMethodDescriptor: String,
     val beInvokedMethodDeclareClass: String,
     val beInvokedMethodName: String,
     val beInvokedMethodReturnType: String,
     val beInvokedMethodParamTypes: Array<String>?,
     val uniqueResult: Boolean,
-) : BaseArgs() {
+) : BaseArgs(findPackage) {
 
     companion object {
 
@@ -50,8 +52,8 @@ class MethodInvokingArgs private constructor(
          *
          *     e.g. "Ljava/lang/String;->length()I"
          */
+        @set:JvmSynthetic
         var methodDescriptor: String = ""
-            @JvmSynthetic set
 
         /**
          * **method declare class**
@@ -60,16 +62,16 @@ class MethodInvokingArgs private constructor(
          *
          *     e.g. "Ljava/lang/String;" or "java.lang.String"
          */
+        @set:JvmSynthetic
         var methodDeclareClass: String = ""
-            @JvmSynthetic set
 
         /**
          * **method name**
          *
          * if empty, match any method name
          */
+        @set:JvmSynthetic
         var methodName: String = ""
-            @JvmSynthetic set
 
         /**
          * **method return type**
@@ -78,8 +80,8 @@ class MethodInvokingArgs private constructor(
          *
          *     e.g. "I" or "int"
          */
+        @set:JvmSynthetic
         var methodReturnType: String = ""
-            @JvmSynthetic set
 
         /**
          * **method parameter types**
@@ -96,40 +98,50 @@ class MethodInvokingArgs private constructor(
          *     matches(["I", ""], ["int", "long"]) == true
          *     matches(["I", ""], ["int"]) == false
          */
+        @set:JvmSynthetic
         var methodParameterTypes: Array<String>? = null
-            @JvmSynthetic set
+
+        /**
+         * **be invoked method descriptor**
+         *
+         * Method description will be parsed to corresponding: [beInvokedMethodDeclareClass], [beInvokedMethodName], [beInvokedMethodReturnType], [beInvokedMethodParamTypes].
+         *
+         *    e.g. "Ljava/lang/String;->length()I"
+         */
+        @set:JvmSynthetic
+        var beInvokedMethodDescriptor: String = ""
 
         /**
          * **be invoked method declare class**
          */
+        @set:JvmSynthetic
         var beInvokedMethodDeclareClass: String = ""
-            @JvmSynthetic set
 
         /**
          * **be invoked method name**
          */
+        @set:JvmSynthetic
         var beInvokedMethodName: String = ""
-            @JvmSynthetic set
 
         /**
          * **be invoked method return type**
          */
+        @set:JvmSynthetic
         var beInvokedMethodReturnType: String = ""
-            @JvmSynthetic set
 
         /**
          * **be invoked method parameter types**
          */
+        @set:JvmSynthetic
         var beInvokedMethodParameterTypes: Array<String>? = null
-            @JvmSynthetic set
 
         /**
          * **unique result**
          *
          * If true, the results will be unique. If you need to get the number of calls, set it to false.
          */
+        @set:JvmSynthetic
         var unique: Boolean = true
-            @JvmSynthetic set
 
         /**
          * [Builder.methodDescriptor]
@@ -167,6 +179,13 @@ class MethodInvokingArgs private constructor(
         }
 
         /**
+         * [Builder.beInvokedMethodDescriptor]
+         */
+        fun beInvokedMethodDescriptor(beInvokedMethodDescriptor: String) = this.also {
+            this.beInvokedMethodDescriptor = beInvokedMethodDescriptor
+        }
+
+        /**
          * [Builder.beInvokedMethodDeclareClass]
          */
         fun beInvokedMethodDeclareClass(beInvokedMethodDeclareClass: String) = this.also {
@@ -190,9 +209,10 @@ class MethodInvokingArgs private constructor(
         /**
          * [Builder.beInvokedMethodParameterTypes]
          */
-        fun beInvokedMethodParameterTypes(beInvokedMethodParameterTypes: Array<String>?) = this.also {
-            this.beInvokedMethodParameterTypes = beInvokedMethodParameterTypes
-        }
+        fun beInvokedMethodParameterTypes(beInvokedMethodParameterTypes: Array<String>?) =
+            this.also {
+                this.beInvokedMethodParameterTypes = beInvokedMethodParameterTypes
+            }
 
         /**
          * [Builder.unique]
@@ -209,11 +229,13 @@ class MethodInvokingArgs private constructor(
         override fun build(): MethodInvokingArgs {
             verifyArgs()
             return MethodInvokingArgs(
+                findPackage,
                 methodDescriptor,
                 methodDeclareClass,
                 methodName,
                 methodReturnType,
                 methodParameterTypes,
+                beInvokedMethodDescriptor,
                 beInvokedMethodDeclareClass,
                 beInvokedMethodName,
                 beInvokedMethodReturnType,

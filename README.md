@@ -13,12 +13,6 @@ methods, or properties.
 
 ---
 
-[DexKit Document](https://luckypray.org/DexKit/en/) contains some examples of API calls, and more APIs can be found in
-[DexKitBridge](http://kdoc.dexkit.luckypray.org/dexkit/io.luckypray.dexkit/-dex-kit-bridge/index.html).
-
-[DexKit API KDoc](https://luckypray.org/DexKit-Doc) is a KDoc (similar to JavaDoc) generated from source code comments. 
-However, it is recommended to use an IDE such as IDEA to view source code comments during development.
-
 ## Background
 
 For `Xposed` modules, we often need to `Hook` specific methods, but due to obfuscation, we need to use means 
@@ -65,7 +59,7 @@ repositories {
     mavenCentral()
 }
 dependencies {
-    implementation 'io.github.neonorbit:dexplore:1.4.3'
+    implementation 'org.luckypray:DexKit:<version>'
 }
 ```
 
@@ -79,7 +73,7 @@ public class abc {
     public boolean cvc() {
         boolean b = false;
         // ...
-        Log.d("VipCheckUtil", "info: xxxx");
+        Log.d("VipCheckUtil", "userInfo: xxxx");
         // ...
         return b;
     }
@@ -102,7 +96,8 @@ class MainHook : IXposedHookLoadPackage {
             val resultMap = bridge.batchFindMethodsUsingStrings {
                 addQuery("VipCheckUtil_isVip", setOf("VipCheckUtil", "userInfo:"))
             }.firstOrNull()?.let {
-                val method: Method = it.getMethodInstance(hostClassLoader)
+                val classDescriptor = it.value.first()
+                val method: Method = classDescriptor.getMethodInstance(hostClassLoader)
                 XposedBridge.hookMethod(method, XC_MethodReplacement.returnConstant(true))
             } ?: Log.e("DexKit", "search result empty")
         }
@@ -113,6 +108,8 @@ class MainHook : IXposedHookLoadPackage {
 ### Usage Document
 
 - [Click here](https://luckypray.org/DexKit/en/) to go to the documentation page to view more detailed tutorials.
+- [DexKit API KDoc](https://luckypray.org/DexKit-Doc) is a KDoc (similar to JavaDoc) generated from source code comments.
+However, it is recommended to use an IDE such as IDEA to view source code comments during development.
 
 ## Open source reference
 

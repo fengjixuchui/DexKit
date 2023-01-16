@@ -6,17 +6,19 @@ package io.luckypray.dexkit.builder
  * @since 1.1.0
  */
 class MethodCallerArgs private constructor(
+    override val findPackage: String,
     val methodDescriptor: String,
     val methodDeclareClass: String,
     val methodName: String,
     val methodReturnType: String,
     val methodParameterTypes: Array<String>?,
+    val callerMethodDescriptor: String,
     val callerMethodDeclareClass: String,
     val callerMethodName: String,
     val callerMethodReturnType: String,
     val callerMethodParameterTypes: Array<String>?,
     val uniqueResult: Boolean,
-) : BaseArgs() {
+) : BaseArgs(findPackage) {
 
     companion object {
 
@@ -50,8 +52,8 @@ class MethodCallerArgs private constructor(
          *
          *     e.g. "Ljava/lang/String;->length()I"
          */
+        @set:JvmSynthetic
         var methodDescriptor: String = ""
-            @JvmSynthetic set
 
         /**
          * **method declare class**
@@ -60,16 +62,16 @@ class MethodCallerArgs private constructor(
          *
          *     e.g. "Ljava/lang/String;" or "java.lang.String"
          */
+        @set:JvmSynthetic
         var methodDeclareClass: String = ""
-            @JvmSynthetic set
 
         /**
          * **method name**
          *
          * if empty, match any method name
          */
+        @set:JvmSynthetic
         var methodName: String = ""
-            @JvmSynthetic set
 
         /**
          * **method return type**
@@ -78,8 +80,8 @@ class MethodCallerArgs private constructor(
          *
          *     e.g. "I" or "int"
          */
+        @set:JvmSynthetic
         var methodReturnType: String = ""
-            @JvmSynthetic set
 
         /**
          * **method parameter types**
@@ -96,40 +98,50 @@ class MethodCallerArgs private constructor(
          *     matches(["I", ""], ["int", "long"]) == true
          *     matches(["I", ""], ["int"]) == false
          */
+        @set:JvmSynthetic
         var methodParameterTypes: Array<String>? = null
-            @JvmSynthetic set
+
+        /**
+         * **caller method descriptor**
+         *
+         * Method description will be parsed to corresponding: [callerMethodDeclareClass], [callerMethodName], [callerMethodReturnType], [callerMethodParameterTypes].
+         *
+         *    e.g. "Lcom/example/MainActivity;->onCreate(Landroid/os/Bundle;)V"
+         */
+        @set:JvmSynthetic
+        var callerMethodDescriptor: String = ""
 
         /**
          * **caller method declare class**
          */
+        @set:JvmSynthetic
         var callerMethodDeclareClass: String = ""
-            @JvmSynthetic set
 
         /**
          * **caller method name**
          */
+        @set:JvmSynthetic
         var callerMethodName: String = ""
-            @JvmSynthetic set
 
         /**
          * **caller method return type**
          */
+        @set:JvmSynthetic
         var callerMethodReturnType: String = ""
-            @JvmSynthetic set
 
         /**
          * **caller method parameter types**
          */
+        @set:JvmSynthetic
         var callerMethodParameterTypes: Array<String>? = null
-            @JvmSynthetic set
 
         /**
          * **unique result**
          *
          * If true, the results will be unique. If you need to get the number of calls, set it to false.
          */
+        @set:JvmSynthetic
         var unique: Boolean = true
-            @JvmSynthetic set
 
         /**
          * [Builder.methodDescriptor]
@@ -164,6 +176,13 @@ class MethodCallerArgs private constructor(
          */
         fun methodParameterTypes(methodParameterTypes: Array<String>?) = this.also {
             this.methodParameterTypes = methodParameterTypes
+        }
+
+        /**
+         * [Builder.callerMethodDescriptor]
+         */
+        fun callerMethodDescriptor(callerMethodDescriptor: String) = this.also {
+            this.callerMethodDescriptor = callerMethodDescriptor
         }
 
         /**
@@ -209,11 +228,13 @@ class MethodCallerArgs private constructor(
         override fun build(): MethodCallerArgs {
             verifyArgs()
             return MethodCallerArgs(
+                findPackage,
                 methodDescriptor,
                 methodDeclareClass,
                 methodName,
                 methodReturnType,
                 methodParameterTypes,
+                callerMethodDescriptor,
                 callerMethodDeclareClass,
                 callerMethodName,
                 callerMethodReturnType,

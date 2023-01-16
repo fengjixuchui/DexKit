@@ -8,8 +8,11 @@
 #include "kmp.h"
 #include "annotation_util.h"
 #include <algorithm>
+#include <iostream>
 
 namespace dexkit {
+
+static std::string GetPackagePath(const std::string &find_package);
 
 using namespace acdat;
 
@@ -90,35 +93,44 @@ void DexKit::ExportDexFile(std::string &out_dir) {
 
 std::map<std::string, std::vector<std::string>>
 DexKit::BatchFindClassesUsingStrings(std::map<std::string, std::set<std::string>> &location_map,
-                                     bool advanced_match,
+                                     int match_type,
+                                     const std::string &find_package,
                                      const std::vector<size_t> &dex_priority) {
     auto acdat = AhoCorasickDoubleArrayTrie<std::string>();
     std::map<std::string, std::string> buildMap;
     std::map<std::string, uint8_t> flag_map;
     for (auto &[name, str_set]: location_map) {
         for (auto &str: str_set) {
-            uint32_t l = 0, r = str.size();
+            std::string new_str;
+            if (match_type == mFull) {
+                match_type = mSimilarRegex;
+                new_str = "^" + str + "$";
+            } else {
+                new_str = str;
+            }
+            uint32_t l = 0, r = new_str.size();
             uint8_t flag = 0;
-            if (advanced_match) {
-                if (str[0] == '^') {
+            if (match_type == mSimilarRegex) {
+                if (new_str[0] == '^') {
                     l = 1;
                     flag |= 1;
                 }
-                if (str[str.size() - 1] == '$') {
-                    r = str.size() - 1;
+                if (new_str[new_str.size() - 1] == '$') {
+                    r = new_str.size() - 1;
                     flag |= 2;
                 }
             }
-            auto origin_str = str.substr(l, r - l);
+            auto origin_str = new_str.substr(l, r - l);
             flag_map[origin_str] = flag;
             buildMap[origin_str] = origin_str;
         }
     }
+    std::string package_path = GetPackagePath(find_package);
     Builder<std::string>().build(buildMap, &acdat);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::map<std::string, std::vector<std::string>>>> futures;
     for (auto &dex_idx: GetDexPriority(dex_priority)) {
-        futures.emplace_back(pool.enqueue([this, dex_idx, &acdat, &location_map, &flag_map]() {
+        futures.emplace_back(pool.enqueue([this, dex_idx, &acdat, &location_map, &flag_map, &package_path]() {
             InitCached(dex_idx, fDefault);
             const auto &method_codes = method_codes_[dex_idx];
             const auto &class_method_ids = class_method_ids_[dex_idx];
@@ -138,8 +150,7 @@ DexKit::BatchFindClassesUsingStrings(std::map<std::string, std::set<std::string>
                                 (flag >> 1 && end != string.size())) {
                                 return;
                             }
-                            string_map[index] =
-                                    ((flag & 1) ? "^" : "") + value + ((flag >> 1) ? "$" : "");
+                            string_map[index] = ((flag & 1) ? "^" : "") + value + ((flag >> 1) ? "$" : "");
                         };
                 acdat.parseText(string.data(), callback);
             }
@@ -148,6 +159,10 @@ DexKit::BatchFindClassesUsingStrings(std::map<std::string, std::set<std::string>
                 return std::map<std::string, std::vector<std::string>>();
             }
             for (int i = 0; i < type_names.size(); ++i) {
+                auto class_name = type_names[i];
+                if (!package_path.empty() && class_name.find(package_path) != 0) {
+                    continue;
+                }
                 if (class_method_ids[i].empty()) {
                     continue;
                 }
@@ -188,8 +203,7 @@ DexKit::BatchFindClassesUsingStrings(std::map<std::string, std::set<std::string>
                 for (auto &[real_class, value_set]: location_map) {
                     std::vector<std::string> vec;
                     std::set_intersection(search_set.begin(), search_set.end(), value_set.begin(),
-                                          value_set.end(),
-                                          std::inserter(vec, vec.begin()));
+                                          value_set.end(), std::inserter(vec, vec.begin()));
                     if (vec.size() == value_set.size()) {
                         result[real_class].emplace_back(type_names[i]);
                     }
@@ -217,35 +231,44 @@ DexKit::BatchFindClassesUsingStrings(std::map<std::string, std::set<std::string>
 
 std::map<std::string, std::vector<std::string>>
 DexKit::BatchFindMethodsUsingStrings(std::map<std::string, std::set<std::string>> &location_map,
-                                     bool advanced_match,
+                                     int match_type,
+                                     const std::string &find_package,
                                      const std::vector<size_t> &dex_priority) {
     auto acdat = AhoCorasickDoubleArrayTrie<std::string>();
     std::map<std::string, std::string> buildMap;
     std::map<std::string, uint8_t> flag_map;
     for (auto &[name, str_set]: location_map) {
         for (auto &str: str_set) {
-            uint32_t l = 0, r = str.size();
+            std::string new_str;
+            if (match_type == mFull) {
+                match_type = mSimilarRegex;
+                new_str = "^" + str + "$";
+            } else {
+                new_str = str;
+            }
+            uint32_t l = 0, r = new_str.size();
             uint8_t flag = 0;
-            if (advanced_match) {
-                if (str[0] == '^') {
+            if (match_type == mSimilarRegex) {
+                if (new_str[0] == '^') {
                     l = 1;
                     flag |= 1;
                 }
-                if (str[str.size() - 1] == '$') {
-                    r = str.size() - 1;
+                if (new_str[new_str.size() - 1] == '$') {
+                    r = new_str.size() - 1;
                     flag |= 2;
                 }
             }
-            auto origin_str = str.substr(l, r - l);
+            auto origin_str = new_str.substr(l, r - l);
             flag_map[origin_str] = flag;
             buildMap[origin_str] = origin_str;
         }
     }
+    auto package_path = GetPackagePath(find_package);
     Builder<std::string>().build(buildMap, &acdat);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::map<std::string, std::vector<std::string>>>> futures;
     for (auto &dex_idx: GetDexPriority(dex_priority)) {
-        futures.emplace_back(pool.enqueue([this, dex_idx, &acdat, &location_map, &flag_map]() {
+        futures.emplace_back(pool.enqueue([this, dex_idx, &acdat, &location_map, &flag_map, &package_path]() {
             InitCached(dex_idx, fDefault);
             auto &method_codes = method_codes_[dex_idx];
             auto &class_method_ids = class_method_ids_[dex_idx];
@@ -265,8 +288,7 @@ DexKit::BatchFindMethodsUsingStrings(std::map<std::string, std::set<std::string>
                                 (flag >> 1 && end != string.size())) {
                                 return;
                             }
-                            string_map[index] =
-                                    ((flag & 1) ? "^" : "") + value + ((flag >> 1) ? "$" : "");
+                            string_map[index] = ((flag & 1) ? "^" : "") + value + ((flag >> 1) ? "$" : "");
                         };
                 acdat.parseText(string.data(), callback);
             }
@@ -275,6 +297,10 @@ DexKit::BatchFindMethodsUsingStrings(std::map<std::string, std::set<std::string>
                 return std::map<std::string, std::vector<std::string>>();
             }
             for (int i = 0; i < type_names.size(); ++i) {
+                auto class_name = type_names[i];
+                if (!package_path.empty() && class_name.find(package_path) != 0) {
+                    continue;
+                }
                 if (class_method_ids[i].empty()) {
                     continue;
                 }
@@ -313,12 +339,10 @@ DexKit::BatchFindMethodsUsingStrings(std::map<std::string, std::set<std::string>
                     if (search_set.empty()) continue;
                     for (auto &[real_method, value_set]: location_map) {
                         std::vector<std::string> vec;
-                        std::set_intersection(search_set.begin(), search_set.end(),
-                                              value_set.begin(), value_set.end(),
-                                              std::inserter(vec, vec.begin()));
+                        std::set_intersection(search_set.begin(), search_set.end(), value_set.begin(),
+                                              value_set.end(), std::inserter(vec, vec.begin()));
                         if (vec.size() == value_set.size()) {
-                            result[real_method].emplace_back(
-                                    GetMethodDescriptor(dex_idx, method_idx));
+                            result[real_method].emplace_back(GetMethodDescriptor(dex_idx, method_idx));
                         }
                     }
                 }
@@ -343,22 +367,26 @@ DexKit::BatchFindMethodsUsingStrings(std::map<std::string, std::set<std::string>
     return result;
 }
 
-std::vector<std::string>
+std::map<std::string, std::vector<std::string>>
 DexKit::FindMethodCaller(const std::string &method_descriptor,
                          const std::string &method_declare_class,
                          const std::string &method_declare_name,
                          const std::string &method_return_type,
                          const std::optional<std::vector<std::string>> &method_param_types,
+                         const std::string &caller_method_descriptor,
                          const std::string &caller_method_declare_class,
                          const std::string &caller_method_declare_name,
                          const std::string &caller_method_return_type,
                          const std::optional<std::vector<std::string>> &caller_method_param_types,
                          bool unique_result,
+                         const std::string &find_package,
                          const std::vector<size_t> &dex_priority) {
     // be invoked method
-    auto extract_tuple = ExtractMethodDescriptor(method_descriptor, method_declare_class,
+    auto extract_tuple = ExtractMethodDescriptor(method_descriptor,
+                                                 method_declare_class,
                                                  method_declare_name,
-                                                 method_return_type, method_param_types);
+                                                 method_return_type,
+                                                 method_param_types);
     std::string class_desc = std::get<0>(extract_tuple);
     std::string method_name = std::get<1>(extract_tuple);
     std::string return_desc = std::get<2>(extract_tuple);
@@ -367,7 +395,8 @@ DexKit::FindMethodCaller(const std::string &method_descriptor,
     bool match_any_param = method_param_types == null_param;
 
     // caller method
-    auto caller_extract_tuple = ExtractMethodDescriptor({}, caller_method_declare_class,
+    auto caller_extract_tuple = ExtractMethodDescriptor(caller_method_descriptor,
+                                                        caller_method_declare_class,
                                                         caller_method_declare_name,
                                                         caller_method_return_type,
                                                         caller_method_param_types);
@@ -381,13 +410,14 @@ DexKit::FindMethodCaller(const std::string &method_descriptor,
     bool need_caller_match = NeedMethodMatch({}, caller_method_declare_class, caller_method_name,
                                              caller_method_return_type, caller_method_param_types);
 
+    auto package_path = GetPackagePath(find_package);
     ThreadPool pool(thread_num_);
-    std::vector<std::future<std::vector<std::string>>> futures;
+    std::vector<std::future<std::map<std::string, std::vector<std::string>>>> futures;
     for (auto &dex_idx: GetDexPriority(dex_priority)) {
         futures.emplace_back(pool.enqueue(
                 [this, dex_idx, &class_desc, &method_name, &return_desc, &param_descs, &match_shorty, &match_any_param,
                         &caller_class_desc, &caller_method_name, &caller_return_desc, &caller_param_descs, &caller_match_shorty,
-                        &caller_match_any_param, &need_caller_match, unique_result]() {
+                        &caller_match_any_param, &need_caller_match, unique_result, &package_path]() {
                     InitCached(dex_idx, fDefault);
                     auto &method_codes = method_codes_[dex_idx];
                     auto &class_method_ids = class_method_ids_[dex_idx];
@@ -401,13 +431,13 @@ DexKit::FindMethodCaller(const std::string &method_descriptor,
                     if (!class_desc.empty()) {
                         class_idx = FindTypeIdx(dex_idx, class_desc);
                         if (class_idx == dex::kNoIndex) {
-                            return std::vector<std::string>();
+                            return std::map<std::string, std::vector<std::string>>();
                         }
                     }
                     if (!return_desc.empty()) {
                         return_type = FindTypeIdx(dex_idx, return_desc);
                         if (return_type == dex::kNoIndex) {
-                            return std::vector<std::string>();
+                            std::map<std::string, std::vector<std::string>>();
                         }
                     }
                     for (auto &v: param_descs) {
@@ -415,7 +445,7 @@ DexKit::FindMethodCaller(const std::string &method_descriptor,
                         if (!v.empty()) {
                             type = FindTypeIdx(dex_idx, v);
                             if (type == dex::kNoIndex) {
-                                return std::vector<std::string>();
+                                return std::map<std::string, std::vector<std::string>>();
                             }
                         }
                         param_types.emplace_back(type);
@@ -428,7 +458,7 @@ DexKit::FindMethodCaller(const std::string &method_descriptor,
                     if (!caller_class_desc.empty()) {
                         caller_class_idx = FindTypeIdx(dex_idx, caller_class_desc);
                         if (caller_class_idx == dex::kNoIndex) {
-                            return std::vector<std::string>();
+                            return std::map<std::string, std::vector<std::string>>();
                         }
                         lower = caller_class_idx;
                         upper = caller_class_idx + 1;
@@ -436,7 +466,7 @@ DexKit::FindMethodCaller(const std::string &method_descriptor,
                     if (!caller_return_desc.empty()) {
                         caller_return_type = FindTypeIdx(dex_idx, caller_return_desc);
                         if (caller_return_type == dex::kNoIndex) {
-                            return std::vector<std::string>();
+                            return std::map<std::string, std::vector<std::string>>();
                         }
                     }
                     for (auto &v: caller_param_descs) {
@@ -444,14 +474,18 @@ DexKit::FindMethodCaller(const std::string &method_descriptor,
                         if (!v.empty()) {
                             type = FindTypeIdx(dex_idx, v);
                             if (type == dex::kNoIndex) {
-                                return std::vector<std::string>();
+                                return std::map<std::string, std::vector<std::string>>();
                             }
                         }
                         caller_param_types.emplace_back(type);
                     }
 
-                    std::vector<std::string> result;
+                    std::map<dex::u2, std::vector<dex::u2>> index_map;
                     for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
                         for (auto method_idx: class_method_ids[c_idx]) {
                             if (need_caller_match) {
                                 if (!IsMethodMatch(dex_idx, method_idx, caller_class_idx,
@@ -490,10 +524,7 @@ DexKit::FindMethodCaller(const std::string &method_descriptor,
                                                           match_any_param)) {
                                             auto descriptor = GetMethodDescriptor(dex_idx,
                                                                                   method_idx);
-                                            result.emplace_back(descriptor);
-                                            if (unique_result) {
-                                                goto label;
-                                            }
+                                            index_map[method_idx].emplace_back(index);
                                         }
                                         break;
                                     }
@@ -502,19 +533,30 @@ DexKit::FindMethodCaller(const std::string &method_descriptor,
                                 }
                                 p += width;
                             }
-                            label:;
                         }
+                    }
+                    std::map<std::string, std::vector<std::string>> result;
+                    for (auto &[key, value]: index_map) {
+                        if (unique_result) {
+                            std::sort(value.begin(), value.end());
+                            value.erase(std::unique(value.begin(), value.end()), value.end());
+                        }
+                        auto caller_descriptor = GetMethodDescriptor(dex_idx, key);
+                        std::vector<std::string> be_called_descriptors;
+                        for (auto v: value) {
+                            auto be_called_descriptor = GetMethodDescriptor(dex_idx, v);
+                            be_called_descriptors.emplace_back(be_called_descriptor);
+                        }
+                        result.emplace(caller_descriptor, be_called_descriptors);
                     }
                     return result;
                 })
         );
     }
-    std::vector<std::string> result;
+    std::map<std::string, std::vector<std::string>> result;
     for (auto &f: futures) {
         auto r = f.get();
-        for (auto &desc: r) {
-            result.emplace_back(desc);
-        }
+        result.insert(r.begin(), r.end());
     }
     return result;
 }
@@ -525,17 +567,21 @@ DexKit::FindMethodInvoking(const std::string &method_descriptor,
                            const std::string &method_declare_name,
                            const std::string &method_return_type,
                            const std::optional<std::vector<std::string>> &method_param_types,
+                           const std::string &be_called_method_descriptor,
                            const std::string &be_called_method_declare_class,
                            const std::string &be_called_method_declare_name,
                            const std::string &be_called_method_return_type,
                            const std::optional<std::vector<std::string>> &invoking_method_param_types,
                            bool unique_result,
+                           const std::string &find_package,
                            const std::vector<size_t> &dex_priority) {
 
     // caller method
-    auto extract_tuple = ExtractMethodDescriptor(method_descriptor, method_declare_class,
+    auto extract_tuple = ExtractMethodDescriptor(method_descriptor,
+                                                 method_declare_class,
                                                  method_declare_name,
-                                                 method_return_type, method_param_types);
+                                                 method_return_type,
+                                                 method_param_types);
     std::string caller_class_desc = std::get<0>(extract_tuple);
     std::string caller_method_name = std::get<1>(extract_tuple);
     std::string caller_return_desc = std::get<2>(extract_tuple);
@@ -545,7 +591,8 @@ DexKit::FindMethodInvoking(const std::string &method_descriptor,
     bool caller_match_any_param = method_param_types == null_param;
 
     // be called method
-    auto be_called_extract_tuple = ExtractMethodDescriptor({}, be_called_method_declare_class,
+    auto be_called_extract_tuple = ExtractMethodDescriptor(be_called_method_descriptor,
+                                                           be_called_method_declare_class,
                                                            be_called_method_declare_name,
                                                            be_called_method_return_type,
                                                            invoking_method_param_types);
@@ -557,13 +604,14 @@ DexKit::FindMethodInvoking(const std::string &method_descriptor,
                                                                  be_called_param_descs);
     bool be_called_match_any_param = invoking_method_param_types == null_param;
 
+    auto package_path = GetPackagePath(find_package);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::map<std::string, std::vector<std::string>>>> futures;
     for (auto &dex_idx: GetDexPriority(dex_priority)) {
         futures.emplace_back(pool.enqueue(
                 [this, dex_idx, &caller_class_desc, &caller_method_name, &caller_return_desc, &caller_param_descs, &caller_match_shorty, &caller_match_any_param,
                         &be_called_class_desc, &be_called_method_name, &be_called_return_desc, &be_called_param_descs,
-                        &be_called_match_shorty, &be_called_match_any_param, unique_result]() {
+                        &be_called_match_shorty, &be_called_match_any_param, unique_result, &package_path]() {
                     InitCached(dex_idx, fDefault);
                     auto &method_codes = method_codes_[dex_idx];
                     auto &class_method_ids = class_method_ids_[dex_idx];
@@ -628,6 +676,10 @@ DexKit::FindMethodInvoking(const std::string &method_descriptor,
 
                     std::map<dex::u2, std::vector<dex::u2>> index_map;
                     for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
                         for (auto method_idx: class_method_ids[c_idx]) {
                             if (!IsMethodMatch(dex_idx, method_idx, caller_class_idx,
                                                caller_match_shorty,
@@ -708,22 +760,27 @@ DexKit::FindMethodUsingField(const std::string &field_descriptor,
                              const std::string &field_declare_name,
                              const std::string &field_type,
                              uint32_t used_flags,
+                             const std::string &caller_method_descriptor,
                              const std::string &caller_method_declare_class,
                              const std::string &caller_method_declare_name,
                              const std::string &caller_method_return_type,
                              const std::optional<std::vector<std::string>> &caller_method_param_types,
                              bool unique_result,
+                             const std::string &find_package,
                              const std::vector<size_t> &dex_priority) {
     // be getter field
-    auto extract_tuple = ExtractFieldDescriptor(field_descriptor, field_declare_class,
-                                                field_declare_name, field_type);
+    auto extract_tuple = ExtractFieldDescriptor(field_descriptor,
+                                                field_declare_class,
+                                                field_declare_name,
+                                                field_type);
     std::string field_declare_class_desc = std::get<0>(extract_tuple);
     std::string field_name = std::get<1>(extract_tuple);
     std::string field_type_desc = std::get<2>(extract_tuple);
     if (used_flags == 0) used_flags = fGetting | fSetting;
 
     // caller method
-    auto caller_extract_tuple = ExtractMethodDescriptor({}, caller_method_declare_class,
+    auto caller_extract_tuple = ExtractMethodDescriptor(caller_method_descriptor,
+                                                        caller_method_declare_class,
                                                         caller_method_declare_name,
                                                         caller_method_return_type,
                                                         caller_method_param_types);
@@ -738,13 +795,14 @@ DexKit::FindMethodUsingField(const std::string &field_descriptor,
                                              caller_method_declare_name,
                                              caller_method_return_type, caller_method_param_types);
 
+    auto package_path = GetPackagePath(find_package);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::map<std::string, std::vector<std::string>>>> futures;
     for (auto &dex_idx: GetDexPriority(dex_priority)) {
         futures.emplace_back(pool.enqueue(
                 [this, dex_idx, &field_declare_class_desc, &field_name, &field_type_desc, &used_flags,
                         &caller_class_desc, &caller_method_name, &caller_return_desc, &caller_param_descs,
-                        &caller_match_shorty, &caller_match_any_param, &need_caller_match, unique_result]() {
+                        &caller_match_shorty, &caller_match_any_param, &need_caller_match, unique_result, &package_path]() {
                     InitCached(dex_idx, fDefault);
                     auto &method_codes = method_codes_[dex_idx];
                     auto &class_method_ids = class_method_ids_[dex_idx];
@@ -798,6 +856,10 @@ DexKit::FindMethodUsingField(const std::string &field_descriptor,
 
                     std::map<dex::u2, std::vector<dex::u2>> index_map;
                     for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
                         for (auto method_idx: class_method_ids[c_idx]) {
                             if (need_caller_match) {
                                 if (!IsMethodMatch(dex_idx, method_idx, caller_class_idx,
@@ -866,16 +928,20 @@ DexKit::FindMethodUsingField(const std::string &field_descriptor,
 
 std::vector<std::string>
 DexKit::FindMethodUsingString(const std::string &using_utf8_string,
-                              bool advanced_match,
+                              int match_type,
                               const std::string &method_declare_class,
                               const std::string &method_declare_name,
                               const std::string &method_return_type,
                               const std::optional<std::vector<std::string>> &method_param_types,
                               bool unique_result,
+                              const std::string &find_package,
                               const std::vector<size_t> &dex_priority) {
     // caller method
-    auto extract_tuple = ExtractMethodDescriptor({}, method_declare_class, method_declare_name,
-                                                 method_return_type, method_param_types);
+    auto extract_tuple = ExtractMethodDescriptor({},
+                                                 method_declare_class,
+                                                 method_declare_name,
+                                                 method_return_type,
+                                                 method_param_types);
     std::string caller_class_desc = std::get<0>(extract_tuple);
     std::string caller_method_name = std::get<1>(extract_tuple);
     std::string caller_return_desc = std::get<2>(extract_tuple);
@@ -884,13 +950,14 @@ DexKit::FindMethodUsingString(const std::string &using_utf8_string,
                                                               caller_param_descs);
     bool caller_match_any_param = method_param_types == null_param;
 
+    auto package_path = GetPackagePath(find_package);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::vector<std::string>>> futures;
     for (auto &dex_idx: GetDexPriority(dex_priority)) {
         futures.emplace_back(pool.enqueue(
-                [this, dex_idx, &using_utf8_string, &advanced_match, &caller_class_desc, &caller_method_name,
+                [this, dex_idx, &using_utf8_string, &match_type, &caller_class_desc, &caller_method_name,
                         &caller_return_desc, &caller_param_descs, &caller_match_shorty, caller_match_any_param,
-                        unique_result]() {
+                        unique_result, &package_path]() {
                     InitCached(dex_idx, fDefault);
                     auto &strings = strings_[dex_idx];
                     auto &method_codes = method_codes_[dex_idx];
@@ -899,7 +966,7 @@ DexKit::FindMethodUsingString(const std::string &using_utf8_string,
                     uint32_t lower = 0, upper = type_names.size();
 
                     uint8_t flag = 0;
-                    if (advanced_match) {
+                    if (match_type == mSimilarRegex) {
                         if (using_utf8_string[0] == '^') {
                             flag |= 1;
                         }
@@ -915,6 +982,12 @@ DexKit::FindMethodUsingString(const std::string &using_utf8_string,
                     for (int str_idx = 0; str_idx < strings.size(); ++str_idx) {
                         auto &string = strings[str_idx];
                         auto find_idx = kmp::FindIndex(string, real_str);
+                        if (match_type == mFull) {
+                            if (find_idx == 0 && string.size() == real_str.size()) {
+                                matched_strings.emplace(str_idx);
+                            }
+                            continue;
+                        }
                         if (find_idx == -1 ||
                             (flag & 1 && find_idx != 0) ||
                             (flag & 2 && find_idx != string.size() - real_str.size())) {
@@ -957,6 +1030,10 @@ DexKit::FindMethodUsingString(const std::string &using_utf8_string,
                     }
                     std::vector<std::string> result;
                     for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
                         for (auto method_idx: class_method_ids[c_idx]) {
                             if (!IsMethodMatch(dex_idx, method_idx, caller_class_idx,
                                                caller_match_shorty,
@@ -1020,16 +1097,18 @@ DexKit::FindMethodUsingString(const std::string &using_utf8_string,
 std::vector<std::string>
 DexKit::FindClassUsingAnnotation(const std::string &annotation_class,
                                  const std::string &annotation_using_string,
-                                 bool advanced_match,
+                                 int match_type,
+                                 const std::string &find_package,
                                  const std::vector<size_t> &dex_priority) {
     std::string annotation_class_desc = GetClassDescriptor(annotation_class);
 
+    auto package_path = GetPackagePath(find_package);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::vector<std::string>>> futures;
 
     for (auto &dex_idx: GetDexPriority(dex_priority)) {
         futures.emplace_back(pool.enqueue(
-                [this, dex_idx, &annotation_class_desc, &advanced_match, &annotation_using_string]() {
+                [this, dex_idx, &annotation_class_desc, &match_type, &annotation_using_string, &package_path]() {
                     InitCached(dex_idx, fDefault | fAnnotation);
                     auto &type_names = type_names_[dex_idx];
                     auto &class_annotations = class_annotations_[dex_idx];
@@ -1045,6 +1124,10 @@ DexKit::FindClassUsingAnnotation(const std::string &annotation_class,
 
                     std::vector<std::string> result;
                     for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
                         auto &annotations = class_annotations[c_idx];
                         if (annotations == nullptr || annotations->class_annotation == nullptr) {
                             continue;
@@ -1052,7 +1135,7 @@ DexKit::FindClassUsingAnnotation(const std::string &annotation_class,
                         bool find = FindAnnotationSetUsingString(annotations->class_annotation,
                                                                  annotation_class_idx,
                                                                  annotation_using_string,
-                                                                 advanced_match);
+                                                                 match_type);
                         if (find) {
                             auto descriptor = type_names[c_idx];
                             result.emplace_back(descriptor);
@@ -1076,27 +1159,31 @@ DexKit::FindClassUsingAnnotation(const std::string &annotation_class,
 std::vector<std::string>
 DexKit::FindFieldUsingAnnotation(const std::string &annotation_class,
                                  const std::string &annotation_using_string,
-                                 bool advanced_match,
+                                 int match_type,
                                  const std::string &field_declare_class,
                                  const std::string &field_declare_name,
                                  const std::string &field_type,
+                                 const std::string &find_package,
                                  const std::vector<size_t> &dex_priority) {
     std::string annotation_class_desc = GetClassDescriptor(annotation_class);
 
     // be getter field
-    auto extract_tuple = ExtractFieldDescriptor({}, field_declare_class, field_declare_name,
+    auto extract_tuple = ExtractFieldDescriptor({},
+                                                field_declare_class,
+                                                field_declare_name,
                                                 field_type);
     std::string field_declare_class_desc = std::get<0>(extract_tuple);
     std::string field_name = std::get<1>(extract_tuple);
     std::string field_type_desc = std::get<2>(extract_tuple);
 
+    auto package_path = GetPackagePath(find_package);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::vector<std::string>>> futures;
 
     for (auto &dex_idx: GetDexPriority(dex_priority)) {
         futures.emplace_back(pool.enqueue(
-                [this, dex_idx, &annotation_class_desc, &annotation_using_string, &advanced_match,
-                        &field_declare_class_desc, &field_name, &field_type_desc] {
+                [this, dex_idx, &annotation_class_desc, &annotation_using_string, &match_type,
+                        &field_declare_class_desc, &field_name, &field_type_desc, &package_path] {
                     InitCached(dex_idx, fDefault | fAnnotation);
                     auto &type_names = type_names_[dex_idx];
                     auto &class_annotations = class_annotations_[dex_idx];
@@ -1129,6 +1216,10 @@ DexKit::FindFieldUsingAnnotation(const std::string &annotation_class,
 
                     std::vector<std::string> result;
                     for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
                         auto &annotations = class_annotations[c_idx];
                         if (annotations == nullptr) {
                             continue;
@@ -1142,7 +1233,7 @@ DexKit::FindFieldUsingAnnotation(const std::string &annotation_class,
                             bool find = FindAnnotationSetUsingString(field_annotation->annotations,
                                                                      annotation_class_idx,
                                                                      annotation_using_string,
-                                                                     advanced_match);
+                                                                     match_type);
                             if (find) {
                                 auto descriptor = GetFieldDescriptor(dex_idx, field_idx);
                                 result.emplace_back(descriptor);
@@ -1168,16 +1259,20 @@ DexKit::FindFieldUsingAnnotation(const std::string &annotation_class,
 std::vector<std::string>
 DexKit::FindMethodUsingAnnotation(const std::string &annotation_class,
                                   const std::string &annotation_using_string,
-                                  bool advanced_match,
+                                  int match_type,
                                   const std::string &method_declare_class,
                                   const std::string &method_declare_name,
                                   const std::string &method_return_type,
                                   const std::optional<std::vector<std::string>> &method_param_types,
+                                  const std::string &find_package,
                                   const std::vector<size_t> &dex_priority) {
     std::string annotation_class_desc = GetClassDescriptor(annotation_class);
     // using annotation's method
-    auto extract_tuple = ExtractMethodDescriptor({}, method_declare_class, method_declare_name,
-                                                 method_return_type, method_param_types);
+    auto extract_tuple = ExtractMethodDescriptor({},
+                                                 method_declare_class,
+                                                 method_declare_name,
+                                                 method_return_type,
+                                                 method_param_types);
     std::string caller_class_desc = std::get<0>(extract_tuple);
     std::string caller_method_name = std::get<1>(extract_tuple);
     std::string caller_return_desc = std::get<2>(extract_tuple);
@@ -1186,13 +1281,14 @@ DexKit::FindMethodUsingAnnotation(const std::string &annotation_class,
                                                               caller_param_descs);
     bool caller_match_any_param = method_param_types == null_param;
 
+    auto package_path = GetPackagePath(find_package);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::vector<std::string>>> futures;
     for (auto &dex_idx: GetDexPriority(dex_priority)) {
         futures.emplace_back(pool.enqueue(
-                [this, dex_idx, &annotation_class_desc, &annotation_using_string, &advanced_match,
+                [this, dex_idx, &annotation_class_desc, &annotation_using_string, &match_type,
                         &caller_class_desc, &caller_method_name, &caller_return_desc,
-                        &caller_param_descs, &caller_match_shorty, &caller_match_any_param]() {
+                        &caller_param_descs, &caller_match_shorty, &caller_match_any_param, &package_path]() {
                     InitCached(dex_idx, fDefault | fAnnotation);
                     auto &type_names = type_names_[dex_idx];
                     auto &class_annotations = class_annotations_[dex_idx];
@@ -1238,6 +1334,10 @@ DexKit::FindMethodUsingAnnotation(const std::string &annotation_class,
 
                     std::vector<std::string> result;
                     for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
                         auto &annotations = class_annotations[c_idx];
                         if (annotations == nullptr) {
                             continue;
@@ -1254,7 +1354,7 @@ DexKit::FindMethodUsingAnnotation(const std::string &annotation_class,
                             bool find = FindAnnotationSetUsingString(method_annotation->annotations,
                                                                      annotation_class_idx,
                                                                      annotation_using_string,
-                                                                     advanced_match);
+                                                                     match_type);
                             if (find) {
                                 auto descriptor = GetMethodDescriptor(dex_idx, method_idx);
                                 result.emplace_back(descriptor);
@@ -1281,11 +1381,14 @@ DexKit::FindMethod(const std::string &method_descriptor,
                    const std::string &method_declare_name,
                    const std::string &method_return_type,
                    const std::optional<std::vector<std::string>> &method_param_types,
+                   const std::string &find_package,
                    const std::vector<size_t> &dex_priority) {
 
-    auto extract_tuple = ExtractMethodDescriptor(method_descriptor, method_declare_class,
+    auto extract_tuple = ExtractMethodDescriptor(method_descriptor,
+                                                 method_declare_class,
                                                  method_declare_name,
-                                                 method_return_type, method_param_types);
+                                                 method_return_type,
+                                                 method_param_types);
     std::string class_desc = std::get<0>(extract_tuple);
     std::string method_name = std::get<1>(extract_tuple);
     std::string return_desc = std::get<2>(extract_tuple);
@@ -1293,11 +1396,12 @@ DexKit::FindMethod(const std::string &method_descriptor,
     std::string match_shorty = DescriptorToMatchShorty(return_desc, param_descs);
     bool match_any_param = method_param_types == null_param;
 
+    auto package_path = GetPackagePath(find_package);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::vector<std::string>>> futures;
     for (auto &dex_idx: GetDexPriority(dex_priority)) {
         futures.emplace_back(pool.enqueue(
-                [this, dex_idx, &class_desc, &return_desc, &param_descs, &match_shorty, &method_name, &match_any_param]() {
+                [this, dex_idx, &class_desc, &return_desc, &param_descs, &match_shorty, &method_name, &match_any_param, &package_path]() {
                     InitCached(dex_idx, fDefault);
                     auto &class_method_ids = class_method_ids_[dex_idx];
                     auto &type_names = type_names_[dex_idx];
@@ -1333,6 +1437,10 @@ DexKit::FindMethod(const std::string &method_descriptor,
                     }
                     std::vector<std::string> result;
                     for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
                         for (auto method_idx: class_method_ids[c_idx]) {
                             if (IsMethodMatch(dex_idx, method_idx, class_idx, match_shorty,
                                               method_name,
@@ -1340,6 +1448,51 @@ DexKit::FindMethod(const std::string &method_descriptor,
                                 result.emplace_back(GetMethodDescriptor(dex_idx, method_idx));
                             }
                         }
+                    }
+                    return result;
+                })
+        );
+    }
+    std::vector<std::string> result;
+    for (auto &f: futures) {
+        auto r = f.get();
+        for (auto &desc: r) {
+            result.emplace_back(desc);
+        }
+    }
+    return result;
+}
+
+std::vector<std::string>
+DexKit::FindClass(const std::string &source_file,
+                  const std::string &find_package,
+                  const std::vector<size_t> &dex_priority) {
+    auto package_path = GetPackagePath(find_package);
+    ThreadPool pool(thread_num_);
+    std::vector<std::future<std::vector<std::string>>> futures;
+    for (auto &dex_idx: GetDexPriority(dex_priority)) {
+        futures.emplace_back(pool.enqueue(
+                [this, dex_idx, &source_file, &package_path]() {
+                    InitCached(dex_idx, fDefault);
+                    auto &type_names = type_names_[dex_idx];
+                    auto &type_declared_flag = type_declared_flag_[dex_idx];
+                    auto &class_source_files = class_source_files_[dex_idx];
+                    uint32_t lower = 0, upper = type_names.size();
+                    std::vector<std::string> result;
+                    for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        // Skip this dex does not own the type of class_def
+                        if (!type_declared_flag[c_idx]) {
+                            continue;
+                        }
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
+                        auto &file_name = class_source_files[c_idx];
+                        if (!source_file.empty() && file_name != source_file) {
+                            continue;
+                        }
+                        result.emplace_back(type_names[c_idx]);
                     }
                     return result;
                 })
@@ -1414,9 +1567,13 @@ DexKit::FindMethodUsingOpPrefixSeq(const std::vector<uint8_t> &op_prefix_seq,
                                    const std::string &method_declare_name,
                                    const std::string &method_return_type,
                                    const std::optional<std::vector<std::string>> &method_param_types,
+                                   const std::string &find_package,
                                    const std::vector<size_t> &dex_priority) {
-    auto extract_tuple = ExtractMethodDescriptor({}, method_declare_class, method_declare_name,
-                                                 method_return_type, method_param_types);
+    auto extract_tuple = ExtractMethodDescriptor({},
+                                                 method_declare_class,
+                                                 method_declare_name,
+                                                 method_return_type,
+                                                 method_param_types);
     std::string class_desc = std::get<0>(extract_tuple);
     std::string method_name = std::get<1>(extract_tuple);
     std::string return_desc = std::get<2>(extract_tuple);
@@ -1424,11 +1581,12 @@ DexKit::FindMethodUsingOpPrefixSeq(const std::vector<uint8_t> &op_prefix_seq,
     std::string match_shorty = DescriptorToMatchShorty(return_desc, param_descs);
     bool match_any_param = method_param_types == null_param;
 
+    auto package_path = GetPackagePath(find_package);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::vector<std::string>>> futures;
     for (int dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
         futures.emplace_back(pool.enqueue(
-                [this, dex_idx, &op_prefix_seq, &class_desc, &return_desc, &param_descs, &match_shorty, &method_name, &match_any_param]() {
+                [this, dex_idx, &op_prefix_seq, &class_desc, &return_desc, &param_descs, &match_shorty, &method_name, &match_any_param, &package_path]() {
                     InitCached(dex_idx, fDefault);
                     auto &method_codes = method_codes_[dex_idx];
                     auto &class_method_ids = class_method_ids_[dex_idx];
@@ -1466,6 +1624,10 @@ DexKit::FindMethodUsingOpPrefixSeq(const std::vector<uint8_t> &op_prefix_seq,
                     }
                     std::vector<std::string> result;
                     for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
                         for (auto method_idx: class_method_ids[c_idx]) {
                             if (!IsMethodMatch(dex_idx, method_idx, class_idx, match_shorty,
                                                method_name,
@@ -1515,9 +1677,13 @@ DexKit::FindMethodUsingOpCodeSeq(const std::vector<uint8_t> &op_seq,
                                  const std::string &method_declare_name,
                                  const std::string &method_return_type,
                                  const std::optional<std::vector<std::string>> &method_param_types,
+                                 const std::string &find_package,
                                  const std::vector<size_t> &dex_priority) {
-    auto extract_tuple = ExtractMethodDescriptor({}, method_declare_class, method_declare_name,
-                                                 method_return_type, method_param_types);
+    auto extract_tuple = ExtractMethodDescriptor({},
+                                                 method_declare_class,
+                                                 method_declare_name,
+                                                 method_return_type,
+                                                 method_param_types);
     std::string class_desc = std::get<0>(extract_tuple);
     std::string method_name = std::get<1>(extract_tuple);
     std::string return_desc = std::get<2>(extract_tuple);
@@ -1525,11 +1691,12 @@ DexKit::FindMethodUsingOpCodeSeq(const std::vector<uint8_t> &op_seq,
     std::string match_shorty = DescriptorToMatchShorty(return_desc, param_descs);
     bool match_any_param = method_param_types == null_param;
 
+    auto package_path = GetPackagePath(find_package);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::vector<std::string>>> futures;
     for (int dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
         futures.emplace_back(pool.enqueue(
-                [this, dex_idx, &op_seq, &class_desc, &return_desc, &param_descs, &match_shorty, &method_name, &match_any_param]() {
+                [this, dex_idx, &op_seq, &class_desc, &return_desc, &param_descs, &match_shorty, &method_name, &match_any_param, &package_path]() {
                     InitCached(dex_idx, fDefault | fOpCodeSeq);
                     auto &class_method_ids = class_method_ids_[dex_idx];
                     auto &type_names = type_names_[dex_idx];
@@ -1567,6 +1734,10 @@ DexKit::FindMethodUsingOpCodeSeq(const std::vector<uint8_t> &op_seq,
                     }
                     std::vector<std::string> result;
                     for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
                         for (auto method_idx: class_method_ids[c_idx]) {
                             if (!IsMethodMatch(dex_idx, method_idx, class_idx, match_shorty,
                                                method_name,
@@ -1608,9 +1779,13 @@ DexKit::GetMethodOpCodeSeq(const std::string &method_descriptor,
                            const std::string &method_declare_name,
                            const std::string &method_return_type,
                            const std::optional<std::vector<std::string>> &method_param_types,
+                           const std::string &find_package,
                            const std::vector<size_t> &dex_priority) {
-    auto extract_tuple = ExtractMethodDescriptor({}, method_declare_class, method_declare_name,
-                                                 method_return_type, method_param_types);
+    auto extract_tuple = ExtractMethodDescriptor({},
+                                                 method_declare_class,
+                                                 method_declare_name,
+                                                 method_return_type,
+                                                 method_param_types);
     std::string class_desc = std::get<0>(extract_tuple);
     std::string method_name = std::get<1>(extract_tuple);
     std::string return_desc = std::get<2>(extract_tuple);
@@ -1618,11 +1793,12 @@ DexKit::GetMethodOpCodeSeq(const std::string &method_descriptor,
     std::string match_shorty = DescriptorToMatchShorty(return_desc, param_descs);
     bool match_any_param = method_param_types == null_param;
 
+    auto package_path = GetPackagePath(find_package);
     ThreadPool pool(thread_num_);
     std::vector<std::future<std::map<std::string, std::vector<uint8_t>>>> futures;
     for (int dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
         futures.emplace_back(pool.enqueue(
-                [this, dex_idx, &class_desc, &return_desc, &param_descs, &match_shorty, &method_name, &match_any_param]() {
+                [this, dex_idx, &class_desc, &return_desc, &param_descs, &match_shorty, &method_name, &match_any_param, &package_path]() {
                     InitCached(dex_idx, fDefault | fOpCodeSeq);
                     auto &class_method_ids = class_method_ids_[dex_idx];
                     auto &type_names = type_names_[dex_idx];
@@ -1660,6 +1836,10 @@ DexKit::GetMethodOpCodeSeq(const std::string &method_descriptor,
                     }
                     std::map<std::string, std::vector<uint8_t>> result;
                     for (auto c_idx = lower; c_idx < upper; ++c_idx) {
+                        auto &class_name = type_names[c_idx];
+                        if (!package_path.empty() && class_name.find(package_path) != 0) {
+                            continue;
+                        }
                         for (auto method_idx: class_method_ids[c_idx]) {
                             if (!IsMethodMatch(dex_idx, method_idx, class_idx, match_shorty,
                                                method_name,
@@ -1695,6 +1875,8 @@ void DexKit::InitImages(int begin, int end) {
     }
     strings_.resize(dex_images_.size());
     type_names_.resize(dex_images_.size());
+    type_declared_flag_.resize(dex_images_.size());
+    class_source_files_.resize(dex_images_.size());
     class_method_ids_.resize(dex_images_.size());
     class_field_ids_.resize(dex_images_.size());
     method_codes_.resize(dex_images_.size());
@@ -1721,6 +1903,8 @@ void DexKit::InitCached(size_t dex_idx, dex::u4 flag) {
     auto &reader = readers_[dex_idx];
     auto &strings = strings_[dex_idx];
     auto &type_names = type_names_[dex_idx];
+    auto &type_declared_flag = type_declared_flag_[dex_idx];
+    auto &class_source_files = class_source_files_[dex_idx];
     auto &class_method_ids = class_method_ids_[dex_idx];
     auto &class_field_ids = class_field_ids_[dex_idx];
     auto &method_codes = method_codes_[dex_idx];
@@ -1776,6 +1960,8 @@ void DexKit::InitCached(size_t dex_idx, dex::u4 flag) {
         || (need_init_annotations && (dex_flag & fMethod) == 0)
         || (need_init_method_op_code_seq && (dex_flag & fMethod) == 0)) {
 
+        type_declared_flag.resize(reader.TypeIds().size(), false);
+        class_source_files.resize(reader.TypeIds().size());
         class_method_ids.resize(reader.TypeIds().size());
         method_codes.resize(reader.MethodIds().size(), nullptr);
 
@@ -1783,6 +1969,10 @@ void DexKit::InitCached(size_t dex_idx, dex::u4 flag) {
         method_opcode_seq_init_flag.resize(reader.MethodIds().size(), false);
 
         for (auto &class_def: reader.ClassDefs()) {
+            if (class_def.source_file_idx != dex::kNoIndex) {
+                class_source_files[class_def.class_idx] = strings[class_def.source_file_idx];
+            }
+            type_declared_flag[class_def.class_idx] = true;
             if (class_def.class_data_off == 0) {
                 continue;
             }
@@ -1986,6 +2176,22 @@ inline bool DexKit::NeedMethodMatch(const std::string &method_descriptor,
     return !method_descriptor.empty() || !caller_method_declare_class.empty() ||
            !caller_method_declare_name.empty() || !caller_method_return_type.empty() ||
            caller_method_param_types != std::nullopt;
+}
+
+static std::string GetPackagePath(const std::string &find_package) {
+    if (find_package.empty() || find_package == "/") {
+        return {};
+    }
+    auto path = find_package;
+    if (find_package[0] == '/') {
+        path = "L" + path.substr(1);
+    } else {
+        path = "L" + path;
+    }
+    if (path.back() != '/') {
+        path += '/';
+    }
+    return path;
 }
 
 }  // namespace dexkit

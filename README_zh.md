@@ -12,12 +12,6 @@
 
 ---
 
-[DexKit 文档](https://luckypray.org/DexKit/zh-cn/) 内包含了部分 API 的调用示例，更多的 API 请查看 
-[DexKitBridge](http://kdoc.dexkit.luckypray.org/dexkit/io.luckypray.dexkit/-dex-kit-bridge/index.html)。
-
-[DexKit API KDoc](https://luckypray.org/DexKit-Doc) 基于源码注释生成的 KDoc（类似于 JavaDoc）。
-但是更推荐使用 IDEA 等 IDE 在开发时查看源码内注释。
-
 ## 背景
 
 对于 `Xposed` 模块来说，我们总是需要对某些特定的方法进行 `Hook` ，但是由于混淆的存在，我们需要使用一些手段来找到我们需要的方法。
@@ -56,7 +50,7 @@ repositories {
     mavenCentral()
 }
 dependencies {
-    implementation 'io.github.neonorbit:dexplore:1.4.3'
+    implementation 'org.luckypray:DexKit:<version>'
 }
 ```
 
@@ -70,7 +64,7 @@ public class abc {
     public boolean cvc() {
         boolean b = false;
         // ...
-        Log.d("VipCheckUtil", "info: xxxx");
+        Log.d("VipCheckUtil", "userInfo: xxxx");
         // ...
         return b;
     }
@@ -93,7 +87,8 @@ class MainHook : IXposedHookLoadPackage {
             val resultMap = bridge.batchFindMethodsUsingStrings {
                 addQuery("VipCheckUtil_isVip", setOf("VipCheckUtil", "userInfo:"))
             }.firstOrNull()?.let {
-                val method: Method = it.getMethodInstance(hostClassLoader)
+                val classDescriptor = it.value.first()
+                val method: Method = classDescriptor.getMethodInstance(hostClassLoader)
                 XposedBridge.hookMethod(method, XC_MethodReplacement.returnConstant(true))
             } ?: Log.e("DexKit", "search result empty")
         }
@@ -103,7 +98,9 @@ class MainHook : IXposedHookLoadPackage {
 
 ### 使用文档
 
-- [Click here](https://luckypray.org/DexKit/en/) to go to the documentation page to view more detailed tutorials.
+- [点击此处](https://luckypray.org/DexKit/zh-cn/)进入文档页面查看更详细的教程。
+- [DexKit API KDoc](https://luckypray.org/DexKit-Doc) 基于源码注释生成的 KDoc（类似于 JavaDoc）。
+但是更推荐使用 IDEA 等 IDE 在开发时查看源码内注释。
 
 ## 第三方开源引用
 
