@@ -145,6 +145,7 @@ public:
                      const std::string &caller_method_return_type,
                      const std::optional<std::vector<std::string>> &caller_method_param_types,
                      bool unique_result = true,
+                     const std::string &source_file = "",
                      const std::string &find_package = "",
                      const std::vector<size_t> &dex_priority = {});
 
@@ -182,6 +183,7 @@ public:
                        const std::string &be_called_method_return_type,
                        const std::optional<std::vector<std::string>> &be_called_method_param_types,
                        bool unique_result = true,
+                       const std::string &source_file = "",
                        const std::string &find_package = "",
                        const std::vector<size_t> &dex_priority = {});
 
@@ -214,6 +216,7 @@ public:
                          const std::string &caller_method_return_type,
                          const std::optional<std::vector<std::string>> &caller_method_param_types,
                          bool unique_result = true,
+                         const std::string &source_file = "",
                          const std::string &find_package = "",
                          const std::vector<size_t> &dex_priority = {});
 
@@ -242,6 +245,7 @@ public:
                           const std::string &method_return_type,
                           const std::optional<std::vector<std::string>> &method_param_types,
                           bool unique_result = true,
+                          const std::string &source_file = "",
                           const std::string &find_package = "",
                           const std::vector<size_t> &dex_priority = {});
 
@@ -261,6 +265,7 @@ public:
     FindClassUsingAnnotation(const std::string &annotation_class,
                              const std::string &annotation_using_string,
                              int match_type,
+                             const std::string &source_file = "",
                              const std::string &find_package = "",
                              const std::vector<size_t> &dex_priority = {});
 
@@ -286,6 +291,7 @@ public:
                              const std::string &field_declare_class,
                              const std::string &field_declare_name,
                              const std::string &field_type,
+                             const std::string &source_file = "",
                              const std::string &find_package = "",
                              const std::vector<size_t> &dex_priority = {});
 
@@ -313,6 +319,7 @@ public:
                               const std::string &method_declare_name,
                               const std::string &method_return_type,
                               const std::optional<std::vector<std::string>> &method_param_types,
+                              const std::string &source_file = "",
                               const std::string &find_package = "",
                               const std::vector<size_t> &dex_priority = {});
 
@@ -334,6 +341,7 @@ public:
                const std::string &method_declare_name,
                const std::string &method_return_type,
                const std::optional<std::vector<std::string>> &method_param_types,
+               const std::string &source_file = "",
                const std::string &find_package = "",
                const std::vector<size_t> &dex_priority = {});
 
@@ -370,6 +378,7 @@ public:
                                const std::string &method_declare_name,
                                const std::string &method_return_type,
                                const std::optional<std::vector<std::string>> &method_param_types,
+                               const std::string &source_file = "",
                                const std::string &find_package = "",
                                const std::vector<size_t> &dex_priority = {});
 
@@ -391,6 +400,7 @@ public:
                              const std::string &method_declare_name,
                              const std::string &method_return_type,
                              const std::optional<std::vector<std::string>> &method_param_types,
+                             const std::string &source_file = "",
                              const std::string &find_package = "",
                              const std::vector<size_t> &dex_priority = {});
 
@@ -412,8 +422,15 @@ public:
                        const std::string &method_declare_name,
                        const std::string &method_return_type,
                        const std::optional<std::vector<std::string>> &method_param_types,
+                       const std::string &source_file = "",
                        const std::string &find_package = "",
                        const std::vector<size_t> &dex_priority = {});
+
+    uint32_t GetClassAccessFlags(const std::string &class_descriptor);
+
+    uint32_t GetMethodAccessFlags(const std::string &method_descriptor);
+
+    uint32_t GetFieldAccessFlags(const std::string &field_descriptor);
 
     size_t GetDexNum() {
         return dex_images_.size();
@@ -429,10 +446,14 @@ private:
 
     std::vector<std::vector<std::string_view>> strings_;
     std::vector<std::vector<std::string_view>> type_names_;
+    std::vector<std::unordered_map<std::string_view, dex::u4>> type_ids_map_;
     std::vector<std::vector<bool>> type_declared_flag_;
     std::vector<std::vector<std::string_view>> class_source_files_;
+    std::vector<std::vector<uint32_t>> class_access_flags_;
     std::vector<std::vector<std::vector<uint32_t>>> class_method_ids_;
+    std::vector<std::vector<uint32_t>> method_access_flags_;
     std::vector<std::vector<std::vector<uint32_t>>> class_field_ids_;
+    std::vector<std::vector<uint32_t>> field_access_flags_;
     std::vector<std::vector<const dex::Code *>> method_codes_;
     std::vector<std::vector<const dex::TypeList *>> proto_type_list_;
     std::vector<std::vector<std::vector<uint8_t>>> method_opcode_seq_;
